@@ -130,3 +130,31 @@ def test_public_summaries_contain_no_donor_ids():
     df = pm.normalize_donations(pd.read_csv(DEMO / "donations.csv"))
     for table in pm.build_summaries(df).values():
         assert "donor_name" not in table.columns and "zip_code" not in table.columns
+
+
+def test_federal_register_parse_and_paging():
+    from analysis import federal_register as fr
+
+    page = {"total_pages": 2, "results": [
+        {"title": " Capital rule ", "publication_date": "2026-06-25", "type": "Rule", "html_url": "u1",
+         "agencies": [{"name": "Federal Reserve System"}, {"name": "Comptroller of the Currency"}]},
+        {"title": None, "publication_date": "2026-06-24"},  # dropped: no title
+    ]}
+    df = fr.parse_documents(page)
+    assert list(df.columns) == fr.COLUMNS and len(df) == 1
+    assert df.loc[0, "event"] == "Capital rule" and df.loc[0, "agency"] == "Federal Reserve System; Comptroller of the Currency"
+
+    class Fake:
+        calls = 0
+
+        def get(self, url, params, timeout):
+            Fake.calls += 1
+            outer = self
+            class R:
+                def raise_for_status(s): pass
+                def json(s): return {"total_pages": 2, "results": [
+                    {"title": f"Rule {Fake.calls}", "publication_date": f"2026-0{Fake.calls}-01", "type": "Rule", "agencies": []}]}
+            return R()
+
+    out = fr.fetch_events(session=Fake())
+    assert Fake.calls == 2 and list(out["event"]) == ["Rule 2", "Rule 1"]

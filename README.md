@@ -11,6 +11,12 @@ A Streamlit dashboard that connects four views relevant to risk, compliance, and
 > The app ships with **synthetic demo data** (clearly bannered in the UI). Replace it with real data tab by tab.
 > This is a risk-analysis tool, not investment advice. The event study shows association around a date, not causation. The four-fifths rule is a screening guideline, not a legal conclusion.
 
+## Keeping it fresh
+
+- `refresh_data.py` pulls recent significant rules from the Federal Register API (`data/public/fed_register.csv`) and extends `data/real/prices.csv` through today.
+- `.github/workflows/refresh-data.yml` runs it daily and commits any change, which redeploys the app. Trigger it by hand from the repo's Actions tab ("Run workflow").
+- The Market tab can run its event study on any of those rules, on landmark events, or on a custom date.
+
 ## Run it
 
 ```bash
