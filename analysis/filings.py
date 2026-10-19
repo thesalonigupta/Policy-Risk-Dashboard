@@ -53,7 +53,7 @@ def sentences_with_term(text: str, category: str, limit: int = 5) -> list[str]:
     hits = []
     for s in re.split(r"(?<=[.!?])\s+", text):
         if any(re.search(p, s, flags=re.IGNORECASE) for p in patterns):
-            hits.append(s.strip())
+            hits.append(re.sub(r"^[\s•·▪●‣\-–—]+", "", s).strip())
         if len(hits) >= limit:
             break
     return hits

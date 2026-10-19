@@ -158,3 +158,10 @@ def test_federal_register_parse_and_paging():
 
     out = fr.fetch_events(session=Fake())
     assert Fake.calls == 2 and list(out["event"]) == ["Rule 2", "Rule 1"]
+
+
+def test_sentences_strip_leading_bullets():
+    text = "• •The development and use of AI present risks. Plain sentence about regulation."
+    out = filings.sentences_with_term(text, "AI")
+    assert out and not out[0].startswith(("•", " "))
+    assert out[0].startswith("The development")

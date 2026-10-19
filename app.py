@@ -150,14 +150,19 @@ with tab1:
     sy = sy_all[sy_all["sector"].isin(chosen)]
     st.plotly_chart(
         px.bar(sy, x="year", y="total", color="sector", title="Contributions by sector and year",
-               labels={"total": "Dollars", "year": ""}),
+               labels={"total": "Contributions ($)", "year": ""})
+        .update_yaxes(tickprefix="$", tickformat="~s")
+        .update_traces(hovertemplate="%{fullData.name}, %{x}: $%{y:,.0f}<extra></extra>"),
         width="stretch",
     )
 
     left, right = st.columns(2)
     with left:
         st.subheader("Top committees")
-        st.dataframe(pm.combine_committees(cm_all, chosen), hide_index=True, width="stretch")
+        top_c = pm.combine_committees(cm_all, chosen).rename(
+            columns={"committee": "Committee", "total": "Total given", "donations": "Donations"})
+        top_c["Total given"] = top_c["Total given"].map("${:,.0f}".format)
+        st.dataframe(top_c, hide_index=True, width="stretch")
     with right:
         st.subheader("Lobbying spend by sector")
         if lob_is_demo:
@@ -168,7 +173,9 @@ with tab1:
         lob_f = lob[lob["sector"].isin(chosen)]
         st.plotly_chart(
             px.line(lob_f, x="year", y="spend_millions", color="sector", markers=True,
-                    labels={"spend_millions": "$ millions", "year": ""}),
+                    labels={"spend_millions": "Lobbying spend ($ millions)", "year": ""})
+            .update_yaxes(tickprefix="$", ticksuffix="M")
+            .update_traces(hovertemplate="%{fullData.name}, %{x}: $%{y:.2f}M<extra></extra>"),
             width="stretch",
         )
 
@@ -180,7 +187,10 @@ with tab1:
     if flags.empty:
         st.info("No clusters at this threshold.")
     else:
-        st.dataframe(flags, hide_index=True, width="stretch")
+        shown = flags.rename(columns={"amount": "Gift amount", "total": "Total", "gifts": "Gifts", "donors": "Donors"})
+        for col in ("Gift amount", "Total"):
+            shown[col] = shown[col].map("${:,.0f}".format)
+        st.dataframe(shown, hide_index=True, width="stretch")
 
 # ------------------------------------------------------------------ Tab 2
 with tab2:
@@ -324,7 +334,13 @@ with tab4:
 
     st.subheader("Possible proxy features")
     st.caption("Group is not a model input, but features that differ sharply by group can act as proxies.")
-    st.dataframe(fairness.proxy_check(lend), hide_index=True, width="stretch")
+    proxy = fairness.proxy_check(lend).rename(columns={
+        "income_k": "Avg income", "loan_amount_k": "Avg loan amount", "dti": "Debt-to-income (%)",
+        "ltv": "Loan-to-value (%)", "tract_income_pct": "Tract income vs. area (%)"})
+    for col in ("Avg income", "Avg loan amount"):
+        if col in proxy:
+            proxy[col] = proxy[col].map("${:,.0f}K".format)
+    st.dataframe(proxy, hide_index=True, width="stretch")
 
 # ------------------------------------------------------------------ Tab 5
 with tab5:
