@@ -38,7 +38,7 @@ def parse_documents(payload: dict) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=COLUMNS)
 
 
-def fetch_events(since: str = "2023-01-01", max_pages: int = 6, session=None) -> pd.DataFrame:
+def fetch_events(since: str = "2022-07-01", max_pages: int = 6, session=None) -> pd.DataFrame:
     """Download significant financial-regulator rules since a date (newest first)."""
     http = session or requests
     params = {

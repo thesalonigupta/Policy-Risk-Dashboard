@@ -254,3 +254,29 @@ def test_extract_risk_factors_custom_end_skips_table_of_contents():
     # standard filers (no override) still work: longest span after a Risk Factors heading
     std = ["Item 1A. Risk Factors", "Item 1B. Unresolved Staff Comments"] + ["x"] * 5 + ["Risk Factors"] + body + ["Item 1B. Unresolved Staff Comments"]
     assert edgar.extract_risk_factors(std).count("Some risk sentence") == 150
+
+
+def test_rule_study_permutation_detects_a_systematic_effect():
+    from analysis import rule_study as rs
+
+    rng = np.random.default_rng(3)
+    n = 900
+    spy = rng.normal(0.0003, 0.01, n)
+    xlf = 1.0 * spy + rng.normal(0, 0.005, n)
+    shock_idx = list(range(200, 800, 60))
+    for i in shock_idx:
+        xlf[i:i + 3] -= 0.015                       # every "rule" is followed by a drop
+    dates = pd.bdate_range("2021-01-04", periods=n)
+    px_ = pd.DataFrame({"date": dates.strftime("%Y-%m-%d"), "XLF": 100 * np.cumprod(1 + xlf), "SPY": 100 * np.cumprod(1 + spy)})
+    rules = pd.DataFrame({"date": [px_["date"][i] for i in shock_idx], "event": "rule",
+                          "agency": "Consumer Financial Protection Bureau", "type": "Rule"})
+    ev = rs.event_cars(px_, rules, "XLF")
+    assert len(ev) == len(shock_idx) and (ev["car"] < 0).mean() > 0.9 and (ev["agency_group"] == "CFPB").all()
+    pool = rs.placebo_pool(px_, "XLF", "SPY", rules["date"], n=200)
+    s = rs.summarize(ev, pool, "agency_group")
+    assert s.loc[0, "mean_car"] < -0.03 and s.loc[0, "p_value"] < 0.01 and s.loc[0, "enough_data"]
+    # a group of random-looking events should not look significant
+    fake = pd.DataFrame({"date": [px_["date"][i] for i in range(210, 750, 55)], "event": "x", "agency": "Securities and Exchange Commission", "type": "Rule"})
+    ev2 = rs.event_cars(px_, fake, "XLF")
+    s2 = rs.summarize(ev2, pool, "agency_group")
+    assert s2.loc[0, "p_value"] > 0.01

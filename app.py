@@ -10,7 +10,7 @@ import plotly.express as px
 import streamlit as st
 
 import ui
-from analysis import fairness, federal_register as fr, filings, market, political_money as pm
+from analysis import fairness, federal_register as fr, filings, market, political_money as pm, rule_study
 
 ROOT = Path(__file__).parent
 REAL, DEMO, PUBLIC = ROOT / "data" / "real", ROOT / "data" / "demo", ROOT / "data" / "public"
@@ -87,6 +87,13 @@ def reactions_cached(prices, benchmark, ev_date, pre, post):
         group = "Sector fund" if t == "XLF" else "Core firm" if t in ui.CORE else "Peer"
         rows.append({"ticker": t, "name": ui.ticker_label(t), "car": r["car"], "t_stat": r["t_stat"], "group": group})
     return pd.DataFrame(rows)
+
+
+@st.cache_data(show_spinner="Measuring every rule...")
+def rule_study_cached(prices, rules, ticker, benchmark):
+    ev = rule_study.event_cars(prices, rules, ticker, benchmark)
+    pool = rule_study.placebo_pool(prices, ticker, benchmark, ev["date"]) if len(ev) else []
+    return ev, pool
 
 
 @st.cache_data(show_spinner=False)
@@ -444,6 +451,46 @@ with tab2:
             st.plotly_chart(figr, width="stretch")
             st.caption("Peers are other large banks (Morgan Stanley, Citi, Bank of America, Wells Fargo) and asset managers "
                        "(State Street, Blackstone, T. Rowe Price). If everyone moves together, the event is hitting the sector, not one firm.")
+
+        st.subheader("Across all recent rules: do some kinds of rules matter more?")
+        rules_all, _src = regulator_rules()
+        if rules_all is None or rules_all.empty:
+            st.info("The regulator-rule list is unavailable right now.")
+        else:
+            tk_choices = [t for t in prices.columns if t not in ("date", benchmark)]
+            tk_study = st.selectbox("Stock or fund", tk_choices, index=tk_choices.index("XLF") if "XLF" in tk_choices else 0,
+                                    format_func=ui.ticker_label, key="rule_study_tk")
+            ev_all, pool = rule_study_cached(prices, rules_all, tk_study, benchmark)
+            if len(ev_all) < 5 or len(pool) < 50:
+                st.info("Not enough price history to measure these rules.")
+            else:
+                by = st.radio("Group rules by", ["Agency", "Rule or proposal"], horizontal=True)
+                col = "agency_group" if by == "Agency" else "type"
+                summ = rule_study.summarize(ev_all, pool, col)
+                fig_s = px.bar(summ, x=col, y="mean_car", text="events", color_discrete_sequence=[ui.NAVY],
+                               title=f"Average abnormal return for {ui.ticker_label(tk_study)} (5 days before to 10 days after)",
+                               labels={"mean_car": "Average cumulative abnormal return", col: ""})
+                fig_s.update_yaxes(tickformat=".1%")
+                fig_s.update_traces(texttemplate="n=%{text}", hovertemplate="%{x}: %{y:+.2%}<extra></extra>")
+                st.plotly_chart(fig_s, width="stretch")
+                shown_s = summ.rename(columns={col: "Group", "events": "Rules", "mean_car": "Average", "median_car": "Median",
+                                               "share_negative": "Share negative", "p_value": "p-value (vs. random dates)"})
+                for c in ("Average", "Median"):
+                    shown_s[c] = shown_s[c].map("{:+.2%}".format)
+                shown_s["Share negative"] = shown_s["Share negative"].map("{:.0%}".format)
+                shown_s["p-value (vs. random dates)"] = shown_s["p-value (vs. random dates)"].map("{:.2f}".format)
+                st.dataframe(shown_s.drop(columns="enough_data"), hide_index=True, width="stretch")
+                best_p = float(summ["p_value"].min())
+                st.caption(f"The p-value asks how often an average this large shows up for random dates with no rule nearby. "
+                           f"With {len(summ)} groups tested, a p-value near 0.05 would appear by luck about once in 20 tries, so only "
+                           f"values well below that would be convincing. Smallest here: {best_p:.2f}. Rule dates are Federal Register "
+                           f"publication dates, and nearby rules share overlapping windows, so the samples are not fully independent.")
+                with st.expander("Every rule in the sample"):
+                    t = ev_all.sort_values("date", ascending=False).copy()
+                    t["car"] = t["car"].map("{:+.2%}".format)
+                    t["t_stat"] = t["t_stat"].map("{:.2f}".format)
+                    st.dataframe(t.rename(columns={"date": "Date", "event": "Rule", "agency_group": "Agency", "type": "Type",
+                                                   "car": "Abnormal return", "t_stat": "t-stat"}), hide_index=True, width="stretch")
 
 # ------------------------------------------------------------------ Tab 3
 with tab3:
