@@ -181,3 +181,22 @@ def filter_clusters(clusters: pd.DataFrame, sectors, min_gifts: int, exclude_own
     c = c[(c["gifts"] >= min_gifts) & (c["donors"] >= min_gifts)].copy()
     c["total"] = c["gifts"] * c["amount"]
     return c.drop(columns=["own_pac"]).sort_values("total", ascending=False).reset_index(drop=True)
+
+
+def link_to_members(committees: pd.DataFrame, links: pd.DataFrame, sector_totals: pd.DataFrame) -> pd.DataFrame:
+    """Split each sector's giving into: members on the banking panels, other linked members, everyone else.
+
+    `committees` has sector, committee, total (the top recipients); `links` maps recipient committees to members
+    (see build_committee_links.py); `sector_totals` has sector, total across ALL recipients. 'Everyone else' is
+    the sector total minus linked money, so it includes parties, PACs, presidential campaigns, people no longer
+    in Congress, ambiguous names, and recipients outside the top list.
+    """
+    j = committees.merge(links[["recipient_committee", "on_banking_panel"]], left_on="committee", right_on="recipient_committee", how="left")
+    j["linked"] = j["recipient_committee"].notna()
+    banking = j[j["linked"] & j["on_banking_panel"].fillna(False).astype(bool)].groupby("sector")["total"].sum()
+    other = j[j["linked"] & ~j["on_banking_panel"].fillna(False).astype(bool)].groupby("sector")["total"].sum()
+    out = sector_totals.groupby("sector")["total"].sum().rename("all").to_frame()
+    out["Banking-panel members"] = banking.reindex(out.index).fillna(0.0)
+    out["Other members of Congress"] = other.reindex(out.index).fillna(0.0)
+    out["Everyone else (parties, PACs, unlinked)"] = (out["all"] - out["Banking-panel members"] - out["Other members of Congress"]).clip(lower=0)
+    return out.reset_index()

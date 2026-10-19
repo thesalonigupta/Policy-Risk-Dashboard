@@ -306,7 +306,7 @@ def test_ai_policy_and_themes():
 
     ev = ai_policy.load_events(Path(__file__).resolve().parents[1] / "data" / "public" / "ai_events.csv")
     assert ev["date"].is_monotonic_increasing and set(ev["direction"]) <= {"Tighter", "Looser", "Neutral"}
-    assert ev["url"].str.startswith("https://").all() and len(ev) >= 8
+    assert ev["url"].str.startswith("https://").all() and len(ev) >= 8 and ev["short"].notna().all() and ev["short"].is_unique
 
     sents = ai_policy.ai_regulation_sentences(
         "Our use of artificial intelligence may subject us to new laws and regulation in several jurisdictions. "
@@ -372,3 +372,22 @@ def test_mitigation_reweighing_and_thresholds():
     assert gt["accuracy"] <= base["accuracy"] + 0.02          # equalizing rates should not improve accuracy
     fr_ = mitigation.threshold_frontier(fairness.train_model(df)[1], "A")
     assert fr_["cutoff"].is_monotonic_increasing and len(fr_) > 5
+
+
+def test_link_to_members_splits_money_and_never_exceeds_total():
+    from analysis import political_money as pm
+
+    committees = pd.DataFrame({"sector": ["Banking"] * 4, "committee": ["A FOR SENATE", "B FOR CONGRESS", "SOME PAC", "C FOR CONGRESS"],
+                               "total": [100.0, 50.0, 400.0, 25.0]})
+    links = pd.DataFrame({"recipient_committee": ["A FOR SENATE", "B FOR CONGRESS", "C FOR CONGRESS"],
+                          "on_banking_panel": [True, False, False]})
+    totals = pd.DataFrame({"sector": ["Banking", "Banking"], "year": [2023, 2024], "total": [300.0, 475.0]})
+    r = pm.link_to_members(committees, links, totals).iloc[0]
+    assert r["Banking-panel members"] == 100.0 and r["Other members of Congress"] == 75.0
+    assert r["Everyone else (parties, PACs, unlinked)"] == 600.0 and r["all"] == 775.0
+    # the real links file must reference committees that exist in the real summaries
+    root = Path(__file__).resolve().parents[1] / "data" / "public"
+    real_links = pd.read_csv(root / "member_links.csv")
+    real_c = pd.read_csv(root / "committees_by_sector.csv")
+    assert real_links["recipient_committee"].isin(real_c["committee"]).all()
+    assert real_links["recipient_committee"].is_unique

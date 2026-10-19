@@ -336,6 +336,50 @@ with tab1:
             st.caption("Lobbying is reported by the company; donations are what its employees gave personally. "
                        "The two are different channels, so the ratio is context, not a like-for-like comparison.")
 
+    links_path = PUBLIC / "member_links.csv"
+    if links_path.exists() and not money_is_demo:
+        st.subheader("Do the donations reach the people who oversee them?")
+        ui.explain(
+            "Which donations go to members of Congress who sit on the committees that oversee banks and asset managers?",
+            "Each bar splits a sector's employee giving three ways: members on the House Financial Services or Senate Banking "
+            "committees, other members of Congress, and everyone else. 'Everyone else' covers the firms' own PACs, party "
+            "committees, presidential campaigns, people no longer in Congress, and any recipient I could not identify with certainty.",
+            "I only link a committee when its name clearly names one current member, so the linked share is a floor, not a total. "
+            "Committee seats are today's (119th Congress), while the donations are from 2023-24, so some members sat elsewhere then.",
+        )
+        links = pd.read_csv(links_path)
+        split = pm.link_to_members(cm_all, links, sy_all)
+        split = split[split["sector"].isin(chosen)]
+        long = split.melt(id_vars=["sector", "all"], var_name="Recipient", value_name="amount")
+        long["share"] = long["amount"] / long["all"]
+        figl = px.bar(long, x="sector", y="amount", color="Recipient", barmode="stack",
+                      color_discrete_map={"Banking-panel members": ui.BRICK, "Other members of Congress": ui.GOLD,
+                                          "Everyone else (parties, PACs, unlinked)": "#C9D1D9"},
+                      title="Where employee donations went", labels={"amount": "Contributions ($)", "sector": "", "Recipient": ""})
+        figl.update_yaxes(tickprefix="$", tickformat="~s")
+        figl.update_traces(customdata=long["share"], hovertemplate="%{fullData.name}: $%{y:,.0f} (%{customdata:.1%})<extra></extra>")
+        figl.update_layout(legend=dict(orientation="h", y=-0.2))
+        st.plotly_chart(figl, width="stretch")
+        tot_all = split["all"].sum()
+        tot_bank = split["Banking-panel members"].sum()
+        st.markdown(f"**Takeaway:** {tot_bank / tot_all:.1%} of the selected sectors' employee giving (${tot_bank:,.0f} of ${tot_all:,.0f}) went to "
+                    "members who sit on a banking committee. The rest went to recipients that are not linked to a sitting member, such as the firms' own PACs, party committees and presidential campaigns.")
+        linked = cm_all.merge(links, left_on="committee", right_on="recipient_committee")
+        linked = linked[linked["sector"].isin(chosen)]
+        if not linked.empty:
+            top_m = (linked.groupby(["member", "chamber", "state", "party", "finance_panels"], dropna=False)
+                     .agg(total=("total", "sum"), donations=("donations", "sum")).reset_index().sort_values("total", ascending=False).head(12))
+            top_m["finance_panels"] = top_m["finance_panels"].fillna("").replace("", "none of the six finance-related panels")
+            top_m["total"] = top_m["total"].map("${:,.0f}".format)
+            with st.expander("Top linked members of Congress"):
+                st.dataframe(top_m.rename(columns={"member": "Member", "chamber": "Chamber", "state": "State", "party": "Party",
+                                                   "finance_panels": "Finance-related committees", "total": "Received", "donations": "Gifts"}),
+                             hide_index=True, width="stretch")
+                st.caption("Finance-related panels counted: House Financial Services, Senate Banking, House Ways and Means, Senate Finance, "
+                           "and the House and Senate Agriculture committees (which oversee derivatives markets). Only the first two count as "
+                           "'banking-panel' in the chart. Membership: unitedstates/congress-legislators, snapshot in data/public/member_links.csv. "
+                           "Recipients are drawn from each sector's 50 biggest committees; smaller ones are in 'everyone else'.")
+
     codes_path, topics_path = PUBLIC / "lobbying_issue_codes.csv", PUBLIC / "lobbying_topics.csv"
     if codes_path.exists() and topics_path.exists():
         st.subheader("What they lobby on")
@@ -688,11 +732,12 @@ with tab_ai:
         ai_ev = ai_policy.load_events(ai_path)
 
         st.subheader("Key AI policy events")
-        figt = px.scatter(ai_ev, x="date", y="region", color="direction", hover_name="event",
+        figt = px.scatter(ai_ev, x="date", y="region", color="direction", hover_name="event", text="short",
                           color_discrete_map={"Tighter": ui.BRICK, "Looser": ui.TEAL, "Neutral": "#9AA8B5"},
                           labels={"date": "", "region": "", "direction": ""}, title="AI policy events (hover for details)")
-        figt.update_traces(marker=dict(size=14), hovertemplate="%{hovertext}<br>%{x|%b %d, %Y}<extra></extra>")
+        figt.update_traces(marker=dict(size=14), textposition="top center", textfont=dict(size=10), hovertemplate="%{hovertext}<br>%{x|%b %d, %Y}<extra></extra>")
         figt.update_yaxes(categoryorder="array", categoryarray=["EU", "US"])
+        figt.update_layout(height=300)
         st.plotly_chart(figt, width="stretch")
         with st.expander("List of events and sources"):
             lst = ai_ev.assign(Date=ai_ev["date"].dt.strftime("%Y-%m-%d"))[["Date", "event", "region", "direction", "url"]]
@@ -706,16 +751,16 @@ with tab_ai:
         d_show = dens if show_peers else dens[dens["group"] == "Core firm"]
         figd = px.line(d_show, x="year", y="AI_per_1k", color="company", markers=True,
                        title="AI keyword mentions per 1,000 words in the Risk Factors section",
-                       labels={"AI_per_1k": "Mentions per 1,000 words", "year": "Fiscal year", "company": ""})
+                       labels={"AI_per_1k": "Mentions per 1,000 words", "year": "Fiscal year", "company": ""},
+                       color_discrete_sequence=px.colors.qualitative.D3)
         figd.update_xaxes(dtick=1)
-        pick_ev = st.multiselect("Mark events on the chart", ai_ev["event"].tolist(),
-                                 default=[e for e in ai_ev["event"] if e.startswith(("Executive Order 14110", "EU AI Act enters", "Executive Order 14179"))],
-                                 key="ai_mark")
-        for r in ai_ev[ai_ev["event"].isin(pick_ev)].itertuples():
+        pick_ev = st.multiselect("Mark events on the chart", ai_ev["short"].tolist(),
+                                 default=["EO 14110 (AI safety)", "EU AI Act in force", "EO 14179 (AI leadership)"], key="ai_mark")
+        for r in ai_ev[ai_ev["short"].isin(pick_ev)].itertuples():
             pos = r.date.year - 0.5 + (r.date.dayofyear - 1) / 365   # place the event inside its fiscal year
-            figd.add_vline(x=pos, line_dash="dot", line_color="#555")
-            figd.add_annotation(x=pos, y=1.02, yref="paper", text=r.event[:28] + "...", showarrow=False, textangle=-60, font=dict(size=10), xanchor="left", yanchor="bottom")
-        figd.update_layout(margin=dict(t=110))
+            figd.add_vline(x=pos, line_dash="dash", line_color="#333", line_width=1.5)
+            figd.add_annotation(x=pos, y=1.0, yref="paper", text=r.short, showarrow=False, textangle=-30, font=dict(size=11), xanchor="left", yanchor="bottom")
+        figd.update_layout(margin=dict(t=130))
         st.plotly_chart(figd, width="stretch")
         yoy = ai_policy.yearly_change(dens).groupby("year")["change"].mean().reset_index()
         biggest = yoy.loc[yoy["change"].idxmax()]
@@ -764,13 +809,14 @@ with tab_ai:
             if rx_ai.empty:
                 st.info("Not enough price history around these events.")
             else:
-                figa = px.bar(rx_ai.assign(label=rx_ai["date"] + "  " + rx_ai["event"].str[:42]), x="car", y="label", color="direction", orientation="h",
+                rx_ai = rx_ai.merge(ai_ev.assign(date=ai_ev["date"].dt.strftime("%Y-%m-%d"))[["date", "short"]], on="date", how="left")
+                rx_ai["label"] = rx_ai["date"] + "  " + rx_ai["short"]
+                figa = px.bar(rx_ai, x="car", y="label", color="direction", orientation="h", category_orders={"label": rx_ai.sort_values("date")["label"].tolist()},
                               color_discrete_map={"Tighter": ui.BRICK, "Looser": ui.TEAL, "Neutral": "#9AA8B5"},
                               title=f"{ui.ticker_label(tk_ai)}: abnormal return vs. the S&P 500 (5 days before to 10 days after)",
                               labels={"car": "Cumulative abnormal return", "label": "", "direction": ""})
                 figa.update_xaxes(tickformat=".0%")
-                figa.update_yaxes(autorange="reversed")
-                st.plotly_chart(figa, width="stretch")
+                                st.plotly_chart(figa, width="stretch")
                 grp = rx_ai.groupby("direction")["car"].agg(["count", "mean"]).reset_index()
                 st.dataframe(grp.assign(mean=grp["mean"].map("{:+.2%}".format)).rename(columns={"direction": "Direction", "count": "Events", "mean": "Average"}),
                              hide_index=True, width="stretch")
@@ -781,8 +827,9 @@ with tab_ai:
         st.subheader("Which new risks showed up, and when")
         fm, topics, prev = themes_cached(fil)
         piv = fm.pivot(index="company", columns="term", values="first_year")
+        st.markdown("**First fiscal year each firm's risk section mentions the term**")
         figf = px.imshow(piv, text_auto=".0f", aspect="auto", color_continuous_scale=[[0, ui.NAVY], [1, "#E8EEF4"]],
-                         labels=dict(color="First year"), title="First fiscal year each firm's risk section mentions the term")
+                         labels=dict(color="First year", x="", y=""))
         figf.update_xaxes(side="top", tickangle=-30)
         figf.update_coloraxes(showscale=False)
         st.plotly_chart(figf, width="stretch")
@@ -906,6 +953,10 @@ with tab5:
         ["Market", "Yahoo Finance adjusted closes: GS, JPM, BLK; peers MS, C, BAC, WFC, STT, BX, TROW; plus XLF and SPY", "Daily refresh plus hourly live toggle", "Prices can lag or be revised."],
         ["Regulator rules", "Federal Register API: significant rules and proposals from the Fed, SEC, OCC, FDIC, CFPB", "Daily refresh; live when available", "Publication date, not announcement date."],
         ["Filings", "SEC EDGAR 10-K risk-factor sections, FY2020-2025: the three core firms plus peers Bank of America, Citigroup, Morgan Stanley, State Street, Blackstone and T. Rowe Price", "Static", "Keyword counts, not meaning. Section rewrites change scores. Wells Fargo is excluded because its 10-K points to an annual-report exhibit instead of containing risk factors."],
+        ["Lobbying by issue", "Senate LDA filings via lda.gov, 2021 onward: issue codes and activity descriptions for the three core firms", "Static (run fetch_lobbying_issues.py)", "Counts activities, not dollars, because filings report money only in total. BlackRock files under BlackRock Funds Services Group."],
+        ["Committee links", "FEC recipient-committee names matched to sitting members; committee seats from unitedstates/congress-legislators (current snapshot)", "Static (run build_committee_links.py)", "Only unambiguous names are linked, so linked totals are a floor. Seats are today's, donations are 2023-24."],
+        ["AI policy events", "Federal Register, SEC, Treasury, White House and EU AI Act timeline pages; every event links to its source", "Static, hand-checked", "Whether an event is 'Tighter', 'Looser' or 'Neutral' is my judgment. Short list, not exhaustive."],
+        ["Enforcement actions", "SEC, CFPB, Federal Reserve and OCC releases (plus American Banker for Wells Fargo); eight actions on five firms", "Static, hand-checked", "Not a complete list; BlackRock has none. Amounts can include redress as well as penalties."],
         ["Lending", "CFPB HMDA 2024 New Jersey mortgages", "Static", "One state, one year; only fields available in the public file."],
     ], columns=["Tab", "Source", "Updates", "Main limitation"]), hide_index=True, width="stretch")
 
@@ -919,7 +970,10 @@ with tab5:
         "- **Disparate impact ratio**: one group's approval rate divided by the reference group's.\n"
         "- **Four-fifths rule**: a screening guideline that flags ratios below 0.80.\n"
         "- **Equal opportunity / equalized odds**: whether qualified applicants (and unqualified ones) are treated the same across groups.\n"
-        "- **Per 1,000 words**: keyword hits scaled by document length so filings can be compared."
+        "- **Per 1,000 words**: keyword hits scaled by document length so filings can be compared.\n"
+        "- **Permutation test**: asking how often random dates would average a result as large as the real one.\n"
+        "- **Reweighing**: giving training rows different weights so a model learns as if group and outcome were unrelated.\n"
+        "- **Topic model**: an algorithm that groups sentences by shared words; the labels are just the top words, not a judgment of meaning."
     )
 
     st.subheader("Choices that affect the results")
@@ -945,5 +999,16 @@ with tab5:
         "- **Comparing filings across firms.** Firms organize risk sections differently (Blackstone's is about three times the length of "
         "Morgan Stanley's because it also covers its funds), and each section was located by its headings. Per-1,000-word scores adjust for length, "
         "but compare patterns across firms rather than exact values.\n"
+        "- **Rules across agencies.** The cross-rule study averages abnormal returns by agency or rule type and compares the average with random dates. "
+        "Many groups are tested, so a few small p-values would be expected by luck; rules close together share overlapping windows, so the samples are not fully independent.\n"
+        "- **Enforcement actions.** Each firm is compared with the financial-sector fund (or the market) over a short window. Several firms charged on one day "
+        "count once in the pooled average, but the pooled p-value still treats firms as independent, so it is a little too optimistic.\n"
+        "- **AI event labels.** 'Tighter', 'Looser' and 'Neutral' are my own reading. AI language rose everywhere after ChatGPT, so the filings cannot separate "
+        "policy effects from general attention to AI. The AI keyword score also counts older terms such as 'algorithm' and 'model risk'.\n"
+        "- **Lobbying by issue.** An activity is one issue on one quarterly filing, so counts depend on how many filings and outside lobbyists a firm uses. "
+        "Topic shares come from keywords in the free-text descriptions.\n"
+        "- **Committee links.** A recipient is linked only when its name names one current member. Parties, PACs, presidential campaigns, former members and ambiguous names are left unlinked.\n"
+        "- **Reducing lending gaps.** Balanced accuracy and the lowest disparate-impact ratio are measured on the same held-out applicants. A different cutoff by group is shown "
+        "only to size the trade-off; it would generally be unlawful disparate treatment in real lending. Accuracy is measured against past decisions, which may embed bias.\n"
         "- **Not advice.** This is an analysis tool. It does not recommend trades, and associations here are not causal claims."
     )
