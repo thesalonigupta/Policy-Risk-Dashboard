@@ -10,7 +10,7 @@ import plotly.express as px
 import streamlit as st
 
 import ui
-from analysis import ai_policy, fairness, federal_register as fr, filings, market, political_money as pm, rule_study, themes
+from analysis import ai_policy, enforcement, fairness, federal_register as fr, filings, market, political_money as pm, rule_study, themes
 
 ROOT = Path(__file__).parent
 REAL, DEMO, PUBLIC = ROOT / "data" / "real", ROOT / "data" / "demo", ROOT / "data" / "public"
@@ -105,6 +105,12 @@ def themes_cached(fil):
 @st.cache_data(show_spinner="Measuring AI events...")
 def ai_reactions_cached(prices, events, ticker, benchmark):
     return ai_policy.event_reactions(prices, events, ticker, benchmark)
+
+
+
+@st.cache_data(show_spinner="Measuring enforcement actions...")
+def enforcement_cached(prices, events, benchmark, pre, post):
+    return enforcement.reactions(prices, events, benchmark=benchmark, pre=pre, post=post)
 
 
 @st.cache_data(show_spinner=False)
@@ -540,6 +546,42 @@ with tab2:
                     t["t_stat"] = t["t_stat"].map("{:.2f}".format)
                     st.dataframe(t.rename(columns={"date": "Date", "event": "Rule", "agency_group": "Agency", "type": "Type",
                                                    "car": "Abnormal return", "t_stat": "t-stat"}), hide_index=True, width="stretch")
+
+        enf_path = PUBLIC / "enforcement_events.csv"
+        if enf_path.exists() and not px_is_demo:
+            st.subheader("When a regulator acts against one firm")
+            st.caption("Unlike a rule that touches every bank, an enforcement action hits one firm. Here each firm is compared with the "
+                       "financial-sector fund or the market on the day it was announced. Every action links to the agency's own release.")
+            enf = enforcement.load_events(enf_path)
+            e1, e2, e3 = st.columns(3)
+            bm_e = e1.radio("Compare against", ["XLF", "SPY"], format_func=ui.ticker_label, horizontal=True, key="enf_bm")
+            pre_e = e2.slider("Days before", 0, 5, 1, key="enf_pre")
+            post_e = e3.slider("Days after", 1, 10, 5, key="enf_post")
+            tbl_e, summ_e = enforcement_cached(prices, enf, bm_e, pre_e, post_e)
+            if tbl_e.empty:
+                st.info("Not enough price history around these actions.")
+            else:
+                fig_e = px.bar(tbl_e.assign(label=tbl_e["date"] + "  " + tbl_e["firm"] + " (" + tbl_e["agency"] + ")"),
+                               x="car", y="label", orientation="h", color="car", color_continuous_scale=[[0, ui.BRICK], [0.5, "#DDDDDD"], [1, ui.TEAL]],
+                               color_continuous_midpoint=0, title=f"Abnormal return vs. {ui.ticker_label(bm_e)} around each action",
+                               labels={"car": "Cumulative abnormal return", "label": ""})
+                fig_e.update_xaxes(tickformat=".0%")
+                fig_e.update_yaxes(autorange="reversed")
+                fig_e.update_coloraxes(showscale=False)
+                fig_e.update_traces(hovertemplate="%{y}: %{x:+.1%}<extra></extra>")
+                st.plotly_chart(fig_e, width="stretch")
+                shown_e = tbl_e.assign(
+                    amount=tbl_e["amount_usd"].map(lambda v: f"${v/1e9:.1f}B" if v >= 1e9 else f"${v/1e6:,.0f}M"),
+                    car=tbl_e["car"].map("{:+.2%}".format), t_stat=tbl_e["t_stat"].map("{:.2f}".format), p_value=tbl_e["p_value"].map("{:.2f}".format))
+                st.dataframe(shown_e[["date", "firm", "agency", "event", "amount", "car", "t_stat", "p_value", "url"]].rename(columns={
+                    "date": "Date", "firm": "Firm", "agency": "Agency", "event": "Action", "amount": "Money",
+                    "car": "Abnormal return", "t_stat": "t-stat", "p_value": "p-value", "url": "Source"}), hide_index=True, width="stretch",
+                    column_config={"Source": st.column_config.LinkColumn("Source", display_text="open")})
+                st.caption(f"{summ_e['n']} actions on {summ_e['dates']} different dates (four were announced together in one SEC sweep, so they count as one). "
+                           f"Average abnormal return {summ_e['mean_car']:+.2%}, p-value {summ_e['p_value']:.2f} against random dates. "
+                           "That p-value treats firms as independent, so it is a little too optimistic. These are the actions I could verify "
+                           "from agency releases for the firms in this dashboard, not a complete list; BlackRock has none here. "
+                           "Money shown is the total reported for the firm, which can include redress as well as penalties.")
 
 # ------------------------------------------------------------------ Tab 3
 with tab3:

@@ -1,0 +1,9 @@
+date,ticker,firm,agency,event,amount_usd,url
+2022-09-27,GS,Goldman Sachs,SEC,Goldman Sachs & Co. charged over off-channel communications recordkeeping (one of 16 firms),125000000,https://www.sec.gov/news/press-release/2022-174
+2022-09-27,MS,Morgan Stanley,SEC,Morgan Stanley & Co. charged over off-channel communications recordkeeping (one of 16 firms),125000000,https://www.sec.gov/news/press-release/2022-174
+2022-09-27,C,Citigroup,SEC,Citigroup Global Markets charged over off-channel communications recordkeeping (one of 16 firms),125000000,https://www.sec.gov/news/press-release/2022-174
+2022-09-27,BAC,Bank of America,SEC,BofA Securities and Merrill Lynch charged over off-channel communications recordkeeping (one of 16 firms),125000000,https://www.sec.gov/news/press-release/2022-174
+2022-12-20,WFC,Wells Fargo,CFPB,CFPB orders Wells Fargo to pay about $3.7 billion over consumer-banking violations,3700000000,https://americanbanker.com/news/cfpb-orders-wells-fargo-to-pay-3-7-billion-amid-widespread-consumer-banking-problems
+2024-03-14,JPM,JPMorgan Chase,OCC / Fed,OCC and Federal Reserve penalize JPMorgan over trade surveillance gaps,348200000,https://occ.gov/news-issuances/news-releases/2024/nr-occ-2024-25.html
+2024-07-10,C,Citigroup,Fed / OCC,Federal Reserve and OCC fine Citigroup for insufficient progress on its 2020 consent orders,135600000,https://www.federalreserve.gov/newsevents/pressreleases/enforcement20240710a.htm
+2024-10-23,GS,Goldman Sachs,CFPB,CFPB orders Goldman Sachs Bank USA to pay $64.8 million over Apple Card failures,64800000,https://www.consumerfinance.gov/enforcement/actions/goldman-sachs-bank-usa/

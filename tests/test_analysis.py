@@ -323,3 +323,24 @@ def test_ai_policy_and_themes():
     assert g["first_year"] == 2023
     assert np.isnan(fm[(fm.company == "B") & (fm.term == "Generative AI")].iloc[0]["first_year"])
     assert themes.adoption_order(fm, "Climate").iloc[0]["company"] == "A"
+
+
+def test_enforcement_events_file_and_reactions():
+    from analysis import enforcement
+
+    ev = enforcement.load_events(Path(__file__).resolve().parents[1] / "data" / "public" / "enforcement_events.csv")
+    assert ev["url"].str.startswith("https://").all() and (ev["amount_usd"] > 0).all()
+    assert {"GS", "JPM", "C"} <= set(ev["ticker"])
+
+    rng = np.random.default_rng(5)
+    n = 700
+    bench = rng.normal(0.0003, 0.008, n)
+    firm = bench + rng.normal(0, 0.004, n)
+    firm[400:403] -= 0.03                      # a real, firm-specific drop after the event
+    dates = pd.bdate_range("2021-01-04", periods=n)
+    px_ = pd.DataFrame({"date": dates.strftime("%Y-%m-%d"), "AAA": 100 * np.cumprod(1 + firm), "XLF": 100 * np.cumprod(1 + bench)})
+    events = pd.DataFrame({"date": [pd.Timestamp(px_["date"][400])], "ticker": ["AAA"], "firm": ["A Corp"], "agency": ["SEC"],
+                           "event": ["x"], "amount_usd": [1e6], "url": ["https://example.com"]})
+    tbl, summ = enforcement.reactions(px_, events, benchmark="XLF", pre=1, post=5)
+    assert len(tbl) == 1 and tbl.loc[0, "car"] < -0.05 and tbl.loc[0, "p_value"] < 0.05
+    assert summ["n"] == 1 and summ["share_negative"] == 1.0
