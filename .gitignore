@@ -3,3 +3,7 @@ __pycache__/
 .DS_Store
 *.zip
 filings_cache/
+
+# raw donor-level data stays on the author computer; app reads data/public/
+data/real/donations.csv
+data/real/employer_audit.csv

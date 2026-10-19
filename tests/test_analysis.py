@@ -103,3 +103,30 @@ def test_fairness_audit_flags_planted_disparity():
     res = fairness.audit(test, "Group A").set_index("group")
     assert res.loc["Group A", "disparate_impact_ratio"] == pytest.approx(1.0)
     assert res.loc["Group B", "disparate_impact_ratio"] < 0.9
+
+
+def test_public_summaries_match_raw_calculations():
+    """Summaries must reproduce what the app used to compute from donor-level rows."""
+    df = pm.normalize_donations(pd.read_csv(DEMO / "donations.csv"))
+    s = pm.build_summaries(df)
+    sectors = sorted(df["sector"].unique())
+    # concentration for the full selection
+    full = s["concentration"][s["concentration"]["sectors"] == pm._sector_key(sectors)].iloc[0]
+    raw = pm.donor_concentration(df)
+    assert full["donors"] == raw["donors"] and abs(full["top1pct_share"] - raw["top1pct_share"]) < 1e-9
+    # top committees
+    got = pm.combine_committees(s["committees"], sectors)
+    want = pm.top_committees(df)
+    assert list(got["committee"]) == list(want["committee"])
+    # clusters at several thresholds, with and without own-PAC exclusion
+    for k in (5, 10, 30):
+        for skip in (True, False):
+            a = pm.filter_clusters(s["clusters"], sectors, k, skip)
+            b = pm.flag_clusters(df, min_gifts=k, exclude_own_pac=skip)
+            assert len(a) == len(b) and abs(a["total"].sum() - b["total"].sum()) < 1e-6
+
+
+def test_public_summaries_contain_no_donor_ids():
+    df = pm.normalize_donations(pd.read_csv(DEMO / "donations.csv"))
+    for table in pm.build_summaries(df).values():
+        assert "donor_name" not in table.columns and "zip_code" not in table.columns

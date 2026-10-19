@@ -61,26 +61,33 @@ tab1, tab2, tab3, tab4 = st.tabs(
 
 # ------------------------------------------------------------------ Tab 1
 with tab1:
-    raw, is_demo = load("donations.csv")
+    summ = pm.load_public_summaries(ROOT / "data" / "public")
+    is_demo = summ is None
+    if is_demo:  # no published summaries: build them from the synthetic demo donations
+        try:
+            summ = pm.build_summaries(pm.normalize_donations(pd.read_csv(DEMO / "donations.csv")))
+        except (ValueError, FileNotFoundError) as e:
+            st.error(f"Demo data missing or invalid: {e}. Run `python make_demo_data.py`.")
+            st.stop()
     demo_banner(is_demo)
-    try:
-        don = pm.normalize_donations(raw)
-    except ValueError as e:
-        st.error(str(e))
-        st.stop()
     lob, is_demo_lob = load("lobbying.csv")
 
-    sectors = sorted(don["sector"].unique())
+    sy_all, cm_all, conc_all, cl_all = (
+        summ["by_sector_year"], summ["committees"], summ["concentration"], summ["clusters"]
+    )
+    sectors = sorted(sy_all["sector"].unique())
     chosen = st.multiselect("Sectors", sectors, default=sectors, key="sectors")
-    d = don[don["sector"].isin(chosen)]
+    if not chosen:
+        st.info("Pick at least one sector.")
+        st.stop()
 
-    conc = pm.donor_concentration(d)
+    conc = conc_all[conc_all["sectors"] == pm._sector_key(chosen)].iloc[0]
     c1, c2, c3 = st.columns(3)
     c1.metric("Total contributions", f"${conc['total']:,.0f}")
-    c2.metric("Unique donors", f"{conc['donors']:,}")
+    c2.metric("Unique donors", f"{int(conc['donors']):,}")
     c3.metric("Top 1% of donors' share", f"{conc['top1pct_share']:.1%}")
 
-    sy = pm.spend_by_sector_year(d)
+    sy = sy_all[sy_all["sector"].isin(chosen)]
     st.plotly_chart(
         px.bar(sy, x="year", y="total", color="sector", title="Contributions by sector and year",
                labels={"total": "Dollars"}),
@@ -90,7 +97,7 @@ with tab1:
     left, right = st.columns(2)
     with left:
         st.subheader("Top committees")
-        st.dataframe(pm.top_committees(d), hide_index=True, width="stretch")
+        st.dataframe(pm.combine_committees(cm_all, chosen), hide_index=True, width="stretch")
     with right:
         st.subheader("Lobbying spend by sector")
         if is_demo_lob:
@@ -108,7 +115,7 @@ with tab1:
     st.subheader("Coordinated-giving flags")
     min_gifts = st.slider("Minimum identical gifts on one day", 5, 60, 10)
     skip_pac = st.checkbox("Ignore gifts to the employer's own PAC (routine payroll deductions)", value=True)
-    flags = pm.flag_clusters(d, min_gifts=min_gifts, exclude_own_pac=skip_pac)
+    flags = pm.filter_clusters(cl_all, chosen, min_gifts=min_gifts, exclude_own_pac=skip_pac)
     st.caption("Screening heuristic only. Group giving is often legal and routine.")
     if flags.empty:
         st.info("No clusters at this threshold.")

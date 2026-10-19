@@ -7,6 +7,7 @@ A Streamlit dashboard that connects four views relevant to risk, compliance, and
 3. **Filing risk language**: AI, regulatory, and political risk language in 10-K filings, scored per 1,000 words, with the matching sentences shown.
 4. **Lending fairness**: a loan-approval model audited for disparate impact and equal-opportunity gaps, plus a proxy-feature check.
 
+> The Political money tab reads aggregated summaries from `data/public/` (no donor-level rows). The raw donor file stays on the author's computer, is gitignored, and regenerates the summaries with `python build_public_summaries.py`.
 > The app ships with **synthetic demo data** (clearly bannered in the UI). Replace it with real data tab by tab.
 > This is a risk-analysis tool, not investment advice. The event study shows association around a date, not causation. The four-fifths rule is a screening guideline, not a legal conclusion.
 
@@ -26,7 +27,7 @@ Any file placed in `data/real/` with the same name overrides its demo version.
 
 | Tab | File | Source | Needed columns |
 |---|---|---|---|
-| Political money | `donations.csv` | FEC bulk "individual contributions" files or your scrapers, converted with `import_donations.py` | donor_name, amount, date, committee (optional: employer, zip_code, sector) |
+| Political money | `donations.csv` (local only, gitignored; run `build_public_summaries.py` to refresh `data/public/`) | FEC bulk "individual contributions" files or your scrapers, converted with `import_donations.py` | donor_name, amount, date, committee (optional: employer, zip_code, sector) |
 | Political money | `lobbying.csv` | Senate lobbying disclosures (LDA, lda.gov API; real 2023-24 totals for the three firms) | sector, year, spend_millions |
 | Market | `prices.csv` | `market.load_prices_yfinance(["XLF","SPY"], start, end)` then save to CSV | date + one column per ticker |
 | Market | `events.csv` | You write it | date, event, ticker |
