@@ -49,10 +49,12 @@ def audit(test: pd.DataFrame, reference_group: str) -> pd.DataFrame:
     rows = []
     ref_rate = test.loc[test["group"] == reference_group, "pred"].mean()
     ref_tpr = _tpr(test[test["group"] == reference_group])
+    ref_fpr = _fpr(test[test["group"] == reference_group])
     ref_actual = test.loc[test["group"] == reference_group, "actual"].mean()
     for grp, sub in test.groupby("group"):
         rate = sub["pred"].mean()
         tpr = _tpr(sub)
+        fpr = _fpr(sub)
         rows.append(
             {
                 "group": grp,
@@ -61,12 +63,36 @@ def audit(test: pd.DataFrame, reference_group: str) -> pd.DataFrame:
                 "actual_approval_rate": sub["actual"].mean(),
                 "actual_rate_ratio": sub["actual"].mean() / ref_actual if ref_actual else np.nan,
                 "disparate_impact_ratio": rate / ref_rate if ref_rate else np.nan,
+                "approval_rate_gap": rate - ref_rate,
                 "true_positive_rate": tpr,
                 "tpr_gap_vs_ref": tpr - ref_tpr,
+                "false_positive_rate": fpr,
+                "fpr_gap_vs_ref": fpr - ref_fpr,
+                "equalized_odds_gap": float(np.nanmax([abs(tpr - ref_tpr), abs(fpr - ref_fpr)])),
                 "passes_four_fifths": bool(rate / ref_rate >= 0.8) if ref_rate else False,
             }
         )
     return pd.DataFrame(rows)
+
+
+def _fpr(sub: pd.DataFrame) -> float:
+    """Share of applicants who should NOT have been approved (actual = 0) that the model approved."""
+    neg = sub[sub["actual"] == 0]
+    return float(neg["pred"].mean()) if len(neg) else np.nan
+
+
+def metric_gaps(result: pd.DataFrame, reference_group: str) -> pd.DataFrame:
+    """Long table of three gap metrics per non-reference group, ready to chart."""
+    sub = result[result["group"] != reference_group]
+    parts = [
+        ("Approval-rate gap", "approval_rate_gap"),
+        ("Equal opportunity gap (approved when they should be)", "tpr_gap_vs_ref"),
+        ("Equalized odds gap (worst of the two error-rate gaps)", "equalized_odds_gap"),
+    ]
+    return pd.concat(
+        [pd.DataFrame({"group": sub["group"], "metric": label, "gap": sub[col]}) for label, col in parts],
+        ignore_index=True,
+    )
 
 
 def _tpr(sub: pd.DataFrame) -> float:

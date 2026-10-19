@@ -171,3 +171,73 @@ def test_sentences_strip_glued_headers():
     text = "AND SUBSIDIARIES The development and use of AI present risks and challenges. SEC rules on AI are evolving quickly."
     out = filings.sentences_with_term(text, "AI")
     assert out[0].startswith("The development") and out[1].startswith("SEC rules")
+
+
+def _synthetic_prices(n=500, seed=1, shock_at=None, shock=0.0):
+    rng = np.random.default_rng(seed)
+    spy = rng.normal(0.0004, 0.01, n)
+    xlf = 1.1 * spy + rng.normal(0, 0.006, n)
+    if shock_at is not None:
+        xlf[shock_at:shock_at + 5] += shock
+    dates = pd.bdate_range("2022-01-03", periods=n)
+    return pd.DataFrame({"date": dates.strftime("%Y-%m-%d"),
+                         "XLF": 100 * np.cumprod(1 + xlf), "SPY": 100 * np.cumprod(1 + spy)})
+
+
+def test_placebo_flags_a_big_shock_and_not_a_quiet_date():
+    px_ = _synthetic_prices(shock_at=300, shock=-0.02)
+    big = market.placebo_test(px_, "XLF", "SPY", px_["date"][300], n=120)
+    assert big["actual"] < -0.05 and big["p_value"] < 0.05
+    quiet = market.placebo_test(px_, "XLF", "SPY", px_["date"][200], n=120)
+    assert quiet["p_value"] > 0.05 and quiet["n"] > 100
+
+
+def test_window_comparison_shapes():
+    px_ = _synthetic_prices()
+    wc = market.window_comparison(px_, "XLF", "SPY", px_["date"][250])
+    assert {"window", "days", "car", "t_stat"} <= set(wc.columns) and len(wc) == 6
+    recent = market.window_comparison(px_, "XLF", "SPY", px_["date"][len(px_) - 12])
+    assert len(recent) < 6   # long windows dropped when prices run out
+
+
+def test_sentence_diff_finds_added_removed_and_ignores_rewording():
+    old = ("We use machine learning models in credit decisions and trading. "
+           "Interest rate changes could reduce our net interest income significantly. "
+           "A cyber attack could disrupt our trading operations and client services.")
+    new = ("We use machine learning models in our credit decisions and in trading. "      # reworded, same idea
+           "Generative AI tools introduce new model risk and data privacy concerns for our clients. "  # added
+           "A cyber attack could disrupt our trading operations and client services.")
+    d = filings.sentence_diff(old, new)
+    assert any("Generative AI" in s for s in d["added"]) and len(d["added"]) == 1
+    assert any("Interest rate" in s for s in d["removed"]) and len(d["removed"]) == 1
+    assert d["kept"] == 2
+    ai_only = filings.sentence_diff(old, new, "AI")
+    assert all(any(k in s.lower() for k in ("ai", "machine learning", "model")) for s in ai_only["added"] + ai_only["removed"])
+
+
+def test_clean_sentence_joins_inline_bullets():
+    out = filings.sentences_with_term("Risks such as:\n•increased AI attack volume\n•new model risk exposure for clients.", "AI")
+    assert "\n" not in out[0] and "; increased AI attack volume" in out[0]
+
+
+def test_fairness_extra_metrics():
+    test = pd.DataFrame({
+        "group": ["A"] * 10 + ["B"] * 10,
+        "actual": [1] * 8 + [0] * 2 + [1] * 8 + [0] * 2,
+        "pred":   [1] * 8 + [1, 0] + [1] * 4 + [0] * 4 + [0, 0],
+    })
+    r = fairness.audit(test, "A").set_index("group")
+    assert r.loc["A", "approval_rate_gap"] == 0
+    assert abs(r.loc["B", "approval_rate_gap"] - (0.4 - 0.9)) < 1e-9
+    assert abs(r.loc["B", "tpr_gap_vs_ref"] - (0.5 - 1.0)) < 1e-9
+    assert abs(r.loc["B", "fpr_gap_vs_ref"] - (0.0 - 0.5)) < 1e-9          # A approves 1 of 2 negatives, B 0 of 2
+    assert abs(r.loc["B", "equalized_odds_gap"] - 0.5) < 1e-9
+    g = fairness.metric_gaps(fairness.audit(test, "A"), "A")
+    assert set(g["group"]) == {"B"} and len(g) == 3
+
+
+def test_employer_year_summary_adds_up():
+    df = pm.normalize_donations(pd.read_csv(DEMO / "donations.csv"))
+    ey = pm.build_summaries(df)["employer_year"]
+    assert abs(ey["total"].sum() - df["amount"].sum()) < 1e-6 and ey["donations"].sum() == len(df)
+    assert "donor_name" not in ey.columns

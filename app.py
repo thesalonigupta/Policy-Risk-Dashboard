@@ -66,6 +66,66 @@ def lending_model(lend: pd.DataFrame, model_type: str):
     return fairness.train_model(lend, model_type=model_type)
 
 
+@st.cache_data(show_spinner="Running placebo test...")
+def placebo_cached(prices, ticker, benchmark, ev_date, pre, post):
+    return market.placebo_test(prices, ticker, benchmark, ev_date, n=300, pre=pre, post=post)
+
+
+@st.cache_data(show_spinner=False)
+def windows_cached(prices, ticker, benchmark, ev_date):
+    return market.window_comparison(prices, ticker, benchmark, ev_date)
+
+
+@st.cache_data(show_spinner=False)
+def reactions_cached(prices, benchmark, ev_date, pre, post):
+    rows = []
+    for t in [c for c in prices.columns if c not in ("date", benchmark)]:
+        try:
+            r = market.event_study(prices, t, benchmark, ev_date, pre=pre, post=post)
+        except ValueError:
+            continue
+        group = "Sector fund" if t == "XLF" else "Core firm" if t in ui.CORE else "Peer"
+        rows.append({"ticker": t, "name": ui.ticker_label(t), "car": r["car"], "t_stat": r["t_stat"], "group": group})
+    return pd.DataFrame(rows)
+
+
+@st.cache_data(show_spinner=False)
+def diff_cached(old_text, new_text, category):
+    return filings.sentence_diff(old_text, new_text, None if category == "All" else category)
+
+
+@st.cache_data(show_spinner=False)
+def best_event_placebo(prices, events):
+    best = None
+    for r in events.itertuples():
+        try:
+            res = market.event_study(prices, "XLF", "SPY", r.date)
+        except ValueError:
+            continue
+        if best is None or abs(res["car"]) > abs(best[1]["car"]):
+            best = (r, res)
+    if best is None:
+        return None
+    r, res = best
+    pt = market.placebo_test(prices, "XLF", "SPY", r.date, n=300)
+    return {"event": r.event, "date": r.date, "car": res["car"], "p": pt["p_value"], "n": pt["n"]}
+
+
+@st.cache_data(show_spinner=False)
+def biggest_ai_change(fil):
+    best = None
+    for co, g in fil.groupby("company"):
+        g = g.sort_values("year")
+        if len(g) < 2:
+            continue
+        a, b = g.iloc[-2], g.iloc[-1]
+        d = filings.sentence_diff(a["text"], b["text"], "AI")
+        if best is None or len(d["added"]) > best["added"]:
+            best = {"company": co, "y0": int(a["year"]), "y1": int(b["year"]),
+                    "added": len(d["added"]), "removed": len(d["removed"])}
+    return best
+
+
 def demo_banner(is_demo: bool):
     if is_demo:
         st.warning("Showing SYNTHETIC demo data. Nothing here reflects real people or companies.")
@@ -116,6 +176,42 @@ if all_real:
             ui.glance_card(k, v, t)
     st.caption("These four numbers update with the data. Each tab below explains where they come from. "
                "This is a risk-analysis tool, not investment advice; associations are not proof of causation.")
+    # ---- plain-English takeaways
+    points = []
+    _sectors = sorted(summ["by_sector_year"]["sector"].unique())
+    _conc = summ["concentration"][summ["concentration"]["sectors"] == pm._sector_key(_sectors)].iloc[0]
+    _lbf = REAL / "lobbying_by_firm.csv"
+    if _lbf.exists():
+        _lb = pd.read_csv(_lbf)
+        _ey = summ["employer_year"]
+        _don, _lob = _ey["total"].sum(), _lb["spend"].sum()
+        points.append(
+            f"Employee giving is concentrated and small next to company lobbying. The top 1% of donors gave "
+            f"{_conc['top1pct_share']:.0%} of the money, and the three firms reported about ${_lob / _don:.1f} in lobbying "
+            f"for every $1 their employees gave in 2023-24. Corporate lobbying is the larger line of political spending to watch."
+        )
+    _be = best_event_placebo(prices_saved, events_saved)
+    if _be:
+        _how = ("larger than on all " + str(_be["n"]) + " random dates we tested") if _be["p"] == 0 else \
+               f"larger than on {1 - _be['p']:.0%} of random dates we tested"
+        points.append(
+            f"Policy and bank-stress events can move financial stocks together. Around {_be['event']} ({_be['date']}), financials moved "
+            f"{_be['car']:+.1%} against the market, {_how}. That points to a real reaction, though not to what caused it."
+        )
+    _ai = biggest_ai_change(fil)
+    if _ai:
+        points.append(
+            f"AI is a changing risk topic, not just a bigger one. {_ai['company']}'s FY{_ai['y1']} filing adds {_ai['added']} "
+            f"AI-related sentences that FY{_ai['y0']} did not have and drops {_ai['removed']}. New wording shows where a firm's concerns are shifting."
+        )
+    _aud = fairness.audit(g_test, ref_default)
+    _low = _aud[_aud["group"] != ref_default].sort_values("disparate_impact_ratio").iloc[0]
+    points.append(
+        f"A model that never sees race can still approve groups at different rates. In this audit, {_low['group']} applicants "
+        f"were approved at {_low['disparate_impact_ratio']:.0%} of the {ref_default} rate, and error rates differ by up to "
+        f"{_low['equalized_odds_gap'] * 100:.0f} percentage points. Inputs like income and neighborhood can act as stand-ins for group."
+    )
+    ui.so_what(points)
 else:
     st.caption("Parts of this dashboard are running on synthetic demo data, so the summary row is hidden.")
 
@@ -179,6 +275,33 @@ with tab1:
             width="stretch",
         )
 
+    lbf_path = REAL / "lobbying_by_firm.csv"
+    if not money_is_demo and lbf_path.exists() and "employer_year" in summ:
+        st.subheader("Employee giving vs. company lobbying")
+        ey, lbf = summ["employer_year"], pd.read_csv(lbf_path)
+        keep = set(ey.loc[ey["sector"].isin(chosen), "employer"])
+        cmp = pd.concat([
+            ey.rename(columns={"employer": "firm", "total": "amount"}).assign(kind="Employee donations")[["firm", "year", "amount", "kind"]],
+            lbf.rename(columns={"spend": "amount"}).assign(kind="Company lobbying")[["firm", "year", "amount", "kind"]],
+        ])
+        cmp = cmp[cmp["firm"].isin(keep)]
+        if not cmp.empty:
+            figc = px.bar(cmp, x="firm", y="amount", color="kind", facet_col="year", barmode="group",
+                          title="Employee donations vs. company lobbying spend, by firm",
+                          labels={"amount": "Dollars", "firm": "", "kind": ""})
+            figc.update_yaxes(tickprefix="$", tickformat="~s")
+            figc.update_traces(hovertemplate="%{x}, %{fullData.name}: $%{y:,.0f}<extra></extra>")
+            figc.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+            st.plotly_chart(figc, width="stretch")
+            wide = cmp.pivot_table(index=["firm", "year"], columns="kind", values="amount").reset_index()
+            wide["Lobbying per $1 of donations"] = wide["Company lobbying"] / wide["Employee donations"]
+            for col in ("Employee donations", "Company lobbying"):
+                wide[col] = wide[col].map("${:,.0f}".format)
+            wide["Lobbying per $1 of donations"] = wide["Lobbying per $1 of donations"].map("${:,.2f}".format)
+            st.dataframe(wide.rename(columns={"firm": "Firm", "year": "Year"}), hide_index=True, width="stretch")
+            st.caption("Lobbying is reported by the company; donations are what its employees gave personally. "
+                       "The two are different channels, so the ratio is context, not a like-for-like comparison.")
+
     st.subheader("Coordinated-giving flags")
     min_gifts = st.slider("Minimum identical gifts on one day", 5, 60, 10)
     skip_pac = st.checkbox("Ignore gifts to the employer's own PAC (routine payroll deductions)", value=True)
@@ -221,8 +344,8 @@ with tab2:
 
     cols = [c for c in prices.columns if c != "date"]
     c1, c2 = st.columns(2)
-    ticker = c1.selectbox("Stock or sector fund", [c for c in cols if c != "SPY"] or cols)
-    benchmark = c2.selectbox("Compare against", cols, index=cols.index("SPY") if "SPY" in cols else 0)
+    ticker = c1.selectbox("Stock or sector fund", [c for c in cols if c != "SPY"] or cols, format_func=ui.ticker_label)
+    benchmark = c2.selectbox("Compare against", cols, index=cols.index("SPY") if "SPY" in cols else 0, format_func=ui.ticker_label)
 
     p1, p2 = st.columns(2)
     pre = p1.slider("Days before event", 1, 15, 5)
@@ -273,6 +396,53 @@ with tab2:
             "before the window. A single event is noisy; one significant window does not prove the event caused it."
         )
 
+        st.subheader("Is this unusual? A placebo test")
+        try:
+            pt = placebo_cached(prices, ticker, benchmark, ev_date, pre, post)
+        except ValueError as e:
+            st.info(str(e))
+        else:
+            figp = px.histogram(x=pt["placebo"], nbins=30, title="Same test on random dates with no particular event",
+                                labels={"x": "Cumulative abnormal return on a random date"})
+            figp.update_traces(marker_color="#B9B3A5", hovertemplate="%{x:.1%}: %{y} dates<extra></extra>")
+            figp.add_vline(x=pt["actual"], line_color=ui.BRICK, line_width=3, annotation_text="This event")
+            figp.update_xaxes(tickformat=".0%")
+            figp.update_yaxes(title="Number of random dates")
+            st.plotly_chart(figp, width="stretch")
+            share = "None" if pt["p_value"] == 0 else f"{pt['p_value']:.0%}"
+            verdict = ("This window looks unusual." if pt["p_value"] < 0.05 else
+                       "This window looks like ordinary noise." if pt["p_value"] > 0.2 else
+                       "Borderline: somewhat unusual, but not clearly beyond noise.")
+            st.markdown(f"**{share} of {pt['n']} random dates** moved this much (this event: {pt['actual']:+.1%}). {verdict}")
+            st.caption("The placebo dates exclude the 20 trading days around the real event. "
+                       "A small share means the real window moved more than everyday noise usually does.")
+
+        st.subheader("Does the answer depend on the window?")
+        try:
+            wc = windows_cached(prices, ticker, benchmark, ev_date)
+        except ValueError as e:
+            st.info(str(e))
+        else:
+            shown_w = wc.rename(columns={"window": "Window", "days": "Days", "car": "Cumulative abnormal return", "t_stat": "t-stat"})
+            shown_w["Cumulative abnormal return"] = shown_w["Cumulative abnormal return"].map("{:+.2%}".format)
+            shown_w["t-stat"] = shown_w["t-stat"].map("{:.2f}".format)
+            st.dataframe(shown_w, hide_index=True, width="stretch")
+            st.caption("If the sign or size flips between windows, treat the result as fragile.")
+
+        st.subheader("How every firm reacted")
+        rx = reactions_cached(prices, benchmark, ev_date, pre, post)
+        if not rx.empty:
+            rx = rx.sort_values("car")
+            figr = px.bar(rx, x="car", y="name", color="group", orientation="h",
+                          color_discrete_map={"Core firm": ui.NAVY, "Peer": "#9AA8B5", "Sector fund": ui.GOLD},
+                          title=f"Cumulative abnormal return vs. {ui.ticker_label(benchmark)}, same event and window",
+                          labels={"car": "Cumulative abnormal return", "name": "", "group": ""})
+            figr.update_xaxes(tickformat=".0%")
+            figr.update_traces(hovertemplate="%{y}: %{x:+.1%}<extra></extra>")
+            st.plotly_chart(figr, width="stretch")
+            st.caption("Peers are other large banks (Morgan Stanley, Citi, Bank of America, Wells Fargo) and asset managers "
+                       "(State Street, Blackstone, T. Rowe Price). If everyone moves together, the event is hitting the sector, not one firm.")
+
 # ------------------------------------------------------------------ Tab 3
 with tab3:
     demo_banner(fil_is_demo)
@@ -307,6 +477,38 @@ with tab3:
     for s in filings.sentences_with_term(text, cat, limit=8) or ["No matching sentences."]:
         st.write("• " + s)
 
+    st.subheader("What changed from one year to the next")
+    st.caption("Sentences are matched by meaning, so light rewording is not counted as new. "
+               "'Added' means nothing similar appeared the year before.")
+    d1, d2, d3 = st.columns(3)
+    dco = d1.selectbox("Company", sorted(fil["company"].unique()), key="diff_co")
+    dyears = sorted(fil[fil["company"] == dco]["year"].unique())
+    old_y = d2.selectbox("Compare", dyears, index=max(0, len(dyears) - 2), key="diff_old")
+    new_y = d3.selectbox("With", dyears, index=len(dyears) - 1, key="diff_new")
+    dcat = st.radio("Topic", ["All"] + list(filings.LEXICONS), horizontal=True, key="diff_cat")
+    if old_y >= new_y:
+        st.info("Pick an earlier year on the left and a later year on the right.")
+    else:
+        grp = fil[fil["company"] == dco].set_index("year")["text"]
+        dd = diff_cached(grp[old_y], grp[new_y], dcat)
+        m1, m2, m3 = st.columns(3)
+        m1.metric("New sentences", len(dd["added"]))
+        m2.metric("Dropped sentences", len(dd["removed"]))
+        m3.metric("Carried over", dd["kept"])
+        la, lb = st.columns(2)
+        with la:
+            st.markdown(f"**Added in FY{new_y}**")
+            for x in dd["added"][:15] or ["Nothing new at this topic."]:
+                st.write("• " + x)
+            if len(dd["added"]) > 15:
+                st.caption(f"Showing 15 of {len(dd['added'])}.")
+        with lb:
+            st.markdown(f"**Dropped since FY{old_y}**")
+            for x in dd["removed"][:15] or ["Nothing dropped at this topic."]:
+                st.write("• " + x)
+            if len(dd["removed"]) > 15:
+                st.caption(f"Showing 15 of {len(dd['removed'])}.")
+
 # ------------------------------------------------------------------ Tab 4
 with tab4:
     demo_banner(lend_is_demo)
@@ -332,6 +534,19 @@ with tab4:
     with st.expander("Full audit table"):
         st.dataframe(result.round(3), hide_index=True, width="stretch")
 
+    st.subheader("Other ways to measure fairness")
+    gaps = fairness.metric_gaps(result, ref)
+    figg = px.bar(gaps, x="group", y="gap", color="metric", barmode="group",
+                  title=f"Gaps vs. {ref} (0 = no gap)",
+                  labels={"gap": "Gap in percentage points", "group": "", "metric": ""},
+                  color_discrete_sequence=[ui.NAVY, ui.BRICK, ui.GOLD])
+    figg.update_yaxes(tickformat="+.0%")
+    figg.update_layout(legend=dict(orientation="h", y=-0.25))
+    st.plotly_chart(figg, width="stretch")
+    st.caption("Approval-rate gap: how much less often the group is approved. Equal opportunity: among applicants who should be "
+               "approved, how much less often the group actually is. Equalized odds: the larger of that gap and the gap in "
+               "wrongly approving applicants who should not be. A model can pass one measure and fail another.")
+
     st.subheader("Possible proxy features")
     st.caption("Group is not a model input, but features that differ sharply by group can act as proxies.")
     proxy = fairness.proxy_check(lend).rename(columns={
@@ -348,7 +563,7 @@ with tab5:
     st.dataframe(pd.DataFrame([
         ["Political money", "FEC individual contributions (employer-matched), 2023-24", "Static; summaries published, donor rows kept private", "Employer names are self-reported, so matching is imperfect. Memo lines removed."],
         ["Lobbying", "Senate Lobbying Disclosure Act filings, 2023-24", "Static", "Amounts are reported rounded; amended filings replace originals."],
-        ["Market", "Yahoo Finance adjusted closes for GS, JPM, BLK, XLF, SPY", "Daily refresh plus hourly live toggle", "Prices can lag or be revised."],
+        ["Market", "Yahoo Finance adjusted closes: GS, JPM, BLK; peers MS, C, BAC, WFC, STT, BX, TROW; plus XLF and SPY", "Daily refresh plus hourly live toggle", "Prices can lag or be revised."],
         ["Regulator rules", "Federal Register API: significant rules and proposals from the Fed, SEC, OCC, FDIC, CFPB", "Daily refresh; live when available", "Publication date, not announcement date."],
         ["Filings", "SEC EDGAR 10-K Item 1A Risk Factors, FY2020-2025", "Static", "Keyword counts, not meaning. Section rewrites change scores."],
         ["Lending", "CFPB HMDA 2024 New Jersey mortgages", "Static", "One state, one year; only fields available in the public file."],
@@ -359,19 +574,32 @@ with tab5:
         "- **Abnormal return**: how much a stock moved beyond what the overall market would predict that day.\n"
         "- **Cumulative abnormal return (CAR)**: the running total of those daily surprises across the event window.\n"
         "- **t-stat**: how large the CAR is compared with normal day-to-day noise. Roughly, beyond 2 or -2 is unusual.\n"
+        "- **Placebo test**: running the same event study on hundreds of random dates to see how big a CAR is by chance alone.\n"
         "- **Beta**: how strongly a stock normally moves with the benchmark.\n"
         "- **Disparate impact ratio**: one group's approval rate divided by the reference group's.\n"
         "- **Four-fifths rule**: a screening guideline that flags ratios below 0.80.\n"
+        "- **Equal opportunity / equalized odds**: whether qualified applicants (and unqualified ones) are treated the same across groups.\n"
         "- **Per 1,000 words**: keyword hits scaled by document length so filings can be compared."
     )
 
     st.subheader("Choices that affect the results")
     st.markdown(
-        "- **Privacy.** Donation data is shown only as totals, committee rankings and concentration. No individual donor "
-        "is identifiable in what this site publishes.\n"
-        "- **Employer matching.** Donations are counted only when the employer field matches a firm-specific pattern, which "
-        "drops look-alike employers but also misses unusual spellings, so totals are likely a floor.\n"
-        "- **Event study.** Market model fit on the 120 trading days before each window, with a 10-day gap. One benchmark (SPY).\n"
-        "- **Fairness model.** Class-balanced so it does not simply approve everyone; results change with model choice.\n"
+        "- **Employer matching.** Donations count only when the employer field matches an anchored, firm-specific pattern "
+        "(for example BlackRock, BlackRock Inc, BlackRock Financial). Look-alike employers such as law firms or similarly named "
+        "companies are dropped. People misspell or abbreviate employers, so totals are likely a floor, not a ceiling.\n"
+        "- **Why donor names are not published.** The FEC data is public, but this site shows only totals, committee rankings and "
+        "concentration. Individual donors are never listed, and the donor-level file stays off the public repository.\n"
+        "- **Event study.** Market model fit on the 120 trading days before each window, with a 10-day gap. One benchmark (SPY). "
+        "It shows a move near a date, not what caused it.\n"
+        "- **Placebo test.** 300 random dates, excluding the 20 trading days around the real event. The share of those dates that "
+        "moved at least as much is an empirical p-value, not a formal significance test.\n"
+        "- **Keyword counts.** Scores count how often a topic appears, not how risky a firm is. Section rewrites and merges change counts. "
+        "The year-over-year view compares sentences instead, so it shows what wording is new.\n"
+        "- **Sentence matching.** Sentences count as new when no sentence in the other year has similar word content (TF-IDF similarity below 0.55). "
+        "Heavy rewording can still look like a change.\n"
+        "- **Fairness model.** Class-balanced so it does not simply approve everyone; results change with model choice. "
+        "It is a screening exercise on 2024 New Jersey mortgages only, not a claim about any real lender.\n"
+        "- **Peers.** Bank and asset-manager peers appear in the Market tab. Donations, lobbying and filings cover only Goldman Sachs, "
+        "JPMorgan Chase and BlackRock so far.\n"
         "- **Not advice.** This is an analysis tool. It does not recommend trades, and associations here are not causal claims."
     )

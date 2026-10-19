@@ -96,6 +96,7 @@ SUMMARY_FILES = {
     "committees": "committees_by_sector.csv",
     "concentration": "concentration.csv",
     "clusters": "clusters.csv",
+    "employer_year": "employer_year.csv",
 }
 CLUSTER_FLOOR = 5          # lowest value of the app's "minimum identical gifts" slider
 TOP_COMMITTEES_PER_SECTOR = 50
@@ -144,8 +145,14 @@ def build_summaries(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
     clusters = g[(g["gifts"] >= CLUSTER_FLOOR) & (g["donors"] >= CLUSTER_FLOOR)].copy()
     clusters["date"] = clusters["date"].dt.strftime("%Y-%m-%d")
 
-    return {"by_sector_year": sy, "committees": committees,
-            "concentration": concentration, "clusters": clusters}
+    employer_year = (
+        df.assign(year=df["date"].dt.year)
+        .groupby(["employer", "sector", "year"], as_index=False)
+        .agg(total=("amount", "sum"), donations=("amount", "size"), donors=("donor_name", "nunique"))
+    )
+
+    return {"by_sector_year": sy, "committees": committees, "concentration": concentration,
+            "clusters": clusters, "employer_year": employer_year}
 
 
 def load_public_summaries(folder) -> dict[str, pd.DataFrame] | None:

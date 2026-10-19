@@ -37,6 +37,11 @@ h1, h2, h3 {letter-spacing: -0.01em;}
 .glance .t {font-size: .9rem; color: #3A3F45; line-height: 1.4;}
 .callout {background: #F0ECE4; border-left: 4px solid #1F4E79; border-radius: 8px; padding: 12px 16px;
           margin: 4px 0 14px 0; color: #2A2F35; font-size: .95rem; line-height: 1.5;}
+.sowhat {background:#fff; border:1px solid #E4DED2; border-left: 5px solid #C8553D; border-radius: 12px;
+         padding: 14px 20px 8px 20px; margin: 14px 0 6px 0;}
+.sowhat .sw-h {font-family: Georgia, 'Times New Roman', serif; font-size: 1.25rem; color: #1F4E79; margin-bottom: 4px;}
+.sowhat ul {margin: 6px 0 8px 0; padding-left: 20px;}
+.sowhat li {margin-bottom: 8px; line-height: 1.5; color: #2A2F35; font-size: .96rem;}
 [data-testid="stMetric"] {background:#fff; border:1px solid #E4DED2; border-radius: 12px; padding: 12px 16px;}
 [data-testid="stMetricValue"] {font-family: Georgia, 'Times New Roman', serif; color: #1F4E79;}
 .stTabs [data-baseweb="tab-list"] {gap: 6px;}
@@ -140,4 +145,27 @@ def lending_takeaway(audit: pd.DataFrame, ref: str) -> tuple[str, str, str]:
         f"{low['disparate_impact_ratio']:.2f}",
         f"In the audit model, the lowest approval-rate ratio vs. {ref} is for {low['group']}. "
         + ("It clears the 0.80 screening line." if ok else "That is below the 0.80 screening line, so it would be flagged for review."),
+    )
+
+
+# ticker -> display name; peers are grouped so charts can colour firms vs. peers
+NAMES = {
+    "GS": "Goldman Sachs", "JPM": "JPMorgan Chase", "BLK": "BlackRock",
+    "MS": "Morgan Stanley", "C": "Citigroup", "BAC": "Bank of America", "WFC": "Wells Fargo",
+    "STT": "State Street", "BX": "Blackstone", "TROW": "T. Rowe Price",
+    "XLF": "Financials sector fund (XLF)", "SPY": "S&P 500 (SPY)",
+}
+CORE = {"GS", "JPM", "BLK"}
+
+
+def ticker_label(t: str) -> str:
+    return f"{NAMES[t]} ({t})" if t in NAMES and t not in ("XLF", "SPY") else NAMES.get(t, t)
+
+
+def so_what(points: list[str]):
+    """Boxed list of plain-English takeaways."""
+    items = "".join(f"<li>{html.escape(p)}</li>" for p in points)
+    st.markdown(
+        '<div class="sowhat"><div class="sw-h">So what?</div><ul>' + items + "</ul></div>",
+        unsafe_allow_html=True,
     )

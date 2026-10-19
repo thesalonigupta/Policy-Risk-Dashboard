@@ -15,7 +15,12 @@ from analysis import federal_register as fr
 from analysis.market import load_prices_yfinance
 
 ROOT = Path(__file__).parent
-TICKERS = ["GS", "JPM", "BLK", "XLF", "SPY"]
+TICKERS = [
+    "GS", "JPM", "BLK",               # the three firms
+    "MS", "C", "BAC", "WFC",           # bank peers
+    "STT", "BX", "TROW",               # asset-manager peers
+    "XLF", "SPY",                      # financials sector ETF, market benchmark
+]
 
 
 def refresh_events() -> bool:

@@ -3,9 +3,9 @@
 A Streamlit dashboard that connects four views relevant to risk, compliance, and policy work in finance:
 
 1. **Political money**: contributions by sector and year, top committees, lobbying spend, donor concentration, and a coordinated-giving screen.
-2. **Market reaction**: event study of abnormal returns around policy events (market model, cumulative abnormal return, rough t-stat). Uses live Yahoo Finance prices (cached for an hour) with a saved snapshot as fallback; you can also test any custom date.
-3. **Filing risk language**: AI, regulatory, and political risk language in 10-K filings, scored per 1,000 words, with the matching sentences shown.
-4. **Lending fairness**: a loan-approval model audited for disparate impact and equal-opportunity gaps, plus a proxy-feature check.
+2. **Market reaction**: event study of abnormal returns around policy events (market model, cumulative abnormal return, rough t-stat), with a placebo test on random dates, a window comparison, and the reaction of bank and asset-manager peers. Uses live Yahoo Finance prices (cached for an hour) with a saved snapshot as fallback; you can also test any custom date.
+3. **Filing risk language**: AI, regulatory, and political risk language in 10-K filings, scored per 1,000 words, with the matching sentences shown and a year-over-year view of which sentences were added or dropped.
+4. **Lending fairness**: a loan-approval model audited for disparate impact, approval-rate, equal-opportunity and equalized-odds gaps, plus a proxy-feature check.
 
 > The Political money tab reads aggregated summaries from `data/public/` (no donor-level rows). The raw donor file stays on the author's computer, is gitignored, and regenerates the summaries with `python build_public_summaries.py`.
 > The app ships with **synthetic demo data** (clearly bannered in the UI). Replace it with real data tab by tab.

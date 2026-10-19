@@ -69,3 +69,78 @@ def event_study(
         "resid_sd": resid_sd,
         "n_days": n,
     }
+
+
+# ---------------------------------------------------------------- robustness checks
+WINDOWS = [(-1, 1), (0, 1), (0, 5), (0, 10), (0, 20), (-5, 5)]
+
+
+def window_comparison(prices: pd.DataFrame, ticker: str, benchmark: str, event_date: str) -> pd.DataFrame:
+    """CAR and rough t-stat over several event windows, fit once on the same estimation window.
+
+    Windows that run past the end of the price data are dropped, so a recent event shows fewer rows.
+    """
+    res = None
+    for post in (30, 20, 10, 5):
+        try:
+            res = event_study(prices, ticker, benchmark, event_date, pre=10, post=post)
+            break
+        except ValueError as e:
+            if "after" not in str(e):
+                raise
+    if res is None:
+        raise ValueError("Not enough price history after the event for any window.")
+    w = res["window"].set_index("day")
+    rows = []
+    for a, b in WINDOWS:
+        if a < w.index.min() or b > w.index.max():
+            continue
+        sub = w.loc[a:b, "abnormal"]
+        car = float(sub.sum())
+        t = car / (res["resid_sd"] * np.sqrt(len(sub))) if res["resid_sd"] > 0 else np.nan
+        rows.append({"window": f"day {a:+d} to {b:+d}", "days": len(sub), "car": car, "t_stat": float(t)})
+    return pd.DataFrame(rows)
+
+
+def placebo_test(
+    prices: pd.DataFrame,
+    ticker: str,
+    benchmark: str,
+    event_date: str,
+    n: int = 300,
+    seed: int = 0,
+    pre: int = 5,
+    post: int = 10,
+    exclusion: int = 20,
+) -> dict:
+    """Run the same event study on random non-event dates to see how big a 'normal' CAR is.
+
+    The empirical p-value is the share of placebo dates whose |CAR| is at least as large as the
+    real event's. A small value says the real window moved more than ordinary noise usually does.
+    Dates within `exclusion` trading days of the real event are skipped.
+    """
+    actual = event_study(prices, ticker, benchmark, event_date, pre=pre, post=post)["car"]
+    dates = pd.to_datetime(prices["date"]).reset_index(drop=True)
+    ev_idx = int(dates.searchsorted(pd.Timestamp(event_date)))
+    est_window, gap = 120, 10
+    lo = est_window + gap + pre + 2
+    hi = len(dates) - post - 3
+    pool = [i for i in range(lo, hi) if abs(i - ev_idx) > exclusion]
+    if len(pool) < 30:
+        raise ValueError("Not enough price history to run a placebo test.")
+    rng = np.random.default_rng(seed)
+    picks = rng.choice(pool, size=min(n, len(pool)), replace=False)
+    cars = []
+    for i in picks:
+        try:
+            cars.append(event_study(prices, ticker, benchmark, str(dates.iloc[i].date()), pre=pre, post=post)["car"])
+        except ValueError:
+            continue
+    cars = np.array(cars)
+    return {
+        "actual": float(actual),
+        "placebo": cars,
+        "p_value": float((np.abs(cars) >= abs(actual)).mean()),
+        "n": int(len(cars)),
+        "sd": float(cars.std()),
+    }
