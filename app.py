@@ -7,10 +7,11 @@ from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 import ui
-from analysis import ai_policy, enforcement, fairness, federal_register as fr, filings, market, political_money as pm, rule_study, themes
+from analysis import ai_policy, enforcement, fairness, mitigation, federal_register as fr, filings, market, political_money as pm, rule_study, themes
 
 ROOT = Path(__file__).parent
 REAL, DEMO, PUBLIC = ROOT / "data" / "real", ROOT / "data" / "demo", ROOT / "data" / "public"
@@ -111,6 +112,13 @@ def ai_reactions_cached(prices, events, ticker, benchmark):
 @st.cache_data(show_spinner="Measuring enforcement actions...")
 def enforcement_cached(prices, events, benchmark, pre, post):
     return enforcement.reactions(prices, events, benchmark=benchmark, pre=pre, post=post)
+
+
+
+@st.cache_data(show_spinner="Comparing ways to reduce the gap (retrains the model several times)...")
+def mitigation_cached(lend, ref, model_type):
+    base_test = fairness.train_model(lend, model_type=model_type)[1]
+    return mitigation.compare(lend, ref, model_type), mitigation.threshold_frontier(base_test, ref)
 
 
 @st.cache_data(show_spinner=False)
@@ -835,6 +843,49 @@ with tab4:
     st.caption("Approval-rate gap: how much less often the group is approved. Equal opportunity: among applicants who should be "
                "approved, how much less often the group actually is. Equalized odds: the larger of that gap and the gap in "
                "wrongly approving applicants who should not be. A model can pass one measure and fail another.")
+
+    st.subheader("Reducing the gap: what helps and what it costs")
+    st.caption("Each approach is scored on accuracy (balanced, so the many approved applicants do not dominate) and on the worst "
+               "disparate-impact ratio across groups. Up and to the right is better; above the dashed line passes the four-fifths screen.")
+    cmp_m, front = mitigation_cached(lend, ref, mtype)
+    fig_m = go.Figure()
+    fig_m.add_trace(go.Scatter(x=front["balanced_accuracy"], y=front["min_di"], mode="lines+markers", name="One cutoff for everyone (sliding the cutoff)",
+                               line=dict(color="#9AA8B5"), marker=dict(size=6), text=[f"cutoff {c:.2f}" for c in front["cutoff"]],
+                               hovertemplate="%{text}<br>balanced accuracy %{x:.1%}<br>worst ratio %{y:.2f}<extra></extra>"))
+    kind_color = {"Baseline": ui.NAVY, "Training fix": ui.TEAL, "Drop a feature": ui.GOLD, "Group thresholds": ui.BRICK}
+    for kind, g in cmp_m.groupby("kind"):
+        fig_m.add_trace(go.Scatter(x=g["balanced_accuracy"], y=g["min_di"], mode="markers", name=kind, text=g["approach"],
+                                   marker=dict(size=13, color=kind_color.get(kind), symbol="x" if kind == "Group thresholds" else "circle"),
+                                   hovertemplate="%{text}<br>balanced accuracy %{x:.1%}<br>worst ratio %{y:.2f}<extra></extra>"))
+    fig_m.add_hline(y=0.8, line_dash="dash", line_color=ui.BRICK, annotation_text="Four-fifths threshold (0.80)")
+    fig_m.update_layout(title=f"Accuracy vs. fairness trade-off (worst group: lowest ratio vs. {ref})", xaxis_title="Balanced accuracy",
+                        yaxis_title="Lowest disparate-impact ratio", legend=dict(orientation="h", y=-0.3))
+    fig_m.update_xaxes(tickformat=".0%")
+    st.plotly_chart(fig_m, width="stretch")
+    st.warning("A different approval cutoff for each racial or ethnic group (the red X) would generally count as disparate treatment under "
+               "ECOA / Regulation B and fair-housing law, so lenders cannot do it. It is shown only to size the trade-off. "
+               "Legitimate routes are retraining, removing or changing inputs, or one cutoff for everyone, plus documenting why.")
+    show_m = cmp_m.assign(accuracy=cmp_m["accuracy"].map("{:.1%}".format), balanced_accuracy=cmp_m["balanced_accuracy"].map("{:.1%}".format),
+                          min_di=cmp_m["min_di"].map("{:.2f}".format), max_tpr_gap=cmp_m["max_tpr_gap"].map("{:.1%}".format),
+                          all_pass_four_fifths=cmp_m["all_pass_four_fifths"].map({True: "yes", False: "no"}),
+                          usable_in_practice=cmp_m["usable_in_practice"].map({True: "yes", False: "no"}))
+    st.dataframe(show_m[["approach", "usable_in_practice", "balanced_accuracy", "accuracy", "min_di", "worst_group", "max_tpr_gap", "all_pass_four_fifths"]].rename(columns={
+        "approach": "Approach", "usable_in_practice": "Allowed in practice", "balanced_accuracy": "Balanced accuracy", "accuracy": "Plain accuracy",
+        "min_di": "Lowest ratio", "worst_group": "Lowest-ratio group", "max_tpr_gap": "Largest equal-opportunity gap", "all_pass_four_fifths": "All groups pass 0.80"}),
+        hide_index=True, width="stretch")
+    base_row = cmp_m[cmp_m["kind"] == "Baseline"].iloc[0]
+    ok = front[front["all_pass_four_fifths"]]
+    if not ok.empty:
+        best = ok.loc[ok["balanced_accuracy"].idxmax()]
+        st.markdown(f"**Takeaway:** the default model (cutoff 0.50) scores {base_row['balanced_accuracy']:.1%} balanced accuracy with a lowest ratio of {base_row['min_di']:.2f}. "
+                    f"A single lower cutoff of {best['cutoff']:.2f} for everyone reaches {best['balanced_accuracy']:.1%} with every group at or above 0.80. "
+                    "Most of that gain comes from approving more applicants overall, which pushes every group's approval rate toward the ceiling and shrinks ratios. "
+                    "It does not remove the underlying gap in who gets approved at a given income and loan size.")
+    else:
+        st.markdown("**Takeaway:** no single cutoff gets every group to 0.80 with this model; see the table for what each approach trades off.")
+    st.caption("Accuracy is measured against past decisions, which may themselves reflect bias, and the model uses only five basic inputs, "
+               "so none of these numbers show what a real lender's model would do. With the logistic model, dropping debt-to-income hurts accuracy and fairness "
+               "together, so removing a feature is not automatically safer.")
 
     st.subheader("Possible proxy features")
     st.caption("Group is not a model input, but features that differ sharply by group can act as proxies.")

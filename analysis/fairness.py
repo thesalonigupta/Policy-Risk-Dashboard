@@ -14,13 +14,24 @@ from sklearn.model_selection import train_test_split
 DEFAULT_FEATURES = ["income_k", "loan_amount_k", "dti", "ltv", "tract_income_pct"]
 
 
-def train_model(df: pd.DataFrame, features=None, model_type: str = "logistic", seed: int = 0):
+def reweighing_weights(group: pd.Series, y: pd.Series) -> np.ndarray:
+    """Kamiran-Calders reweighing: weight each (group, outcome) cell by P(group) * P(outcome) / P(group, outcome),
+    so that group and outcome look statistically independent in the training data."""
+    n = len(y)
+    p_g = group.value_counts(normalize=True)
+    p_y = y.value_counts(normalize=True)
+    p_gy = pd.crosstab(group, y, normalize=True)
+    return np.array([p_g[g] * p_y[o] / p_gy.loc[g, o] for g, o in zip(group, y)])
+
+
+def train_model(df: pd.DataFrame, features=None, model_type: str = "logistic", seed: int = 0, reweigh: bool = False):
     features = features or DEFAULT_FEATURES
     X = df[features]
     y = df["approved"]
     X_tr, X_te, y_tr, y_te, g_tr, g_te = train_test_split(
         X, y, df["group"], test_size=0.3, random_state=seed, stratify=y
     )
+    sw = reweighing_weights(g_tr.reset_index(drop=True), y_tr.reset_index(drop=True)) if reweigh else None
     if model_type == "gradient_boosting":
         model = GradientBoostingClassifier(random_state=seed)
     else:
@@ -29,11 +40,13 @@ def train_model(df: pd.DataFrame, features=None, model_type: str = "logistic", s
     # Scale for logistic regression stability
     if model_type == "logistic":
         mu, sd = X_tr.mean(), X_tr.std().replace(0, 1)
-        model.fit((X_tr - mu) / sd, y_tr)
+        model.fit((X_tr - mu) / sd, y_tr, sample_weight=sw)
         pred = model.predict((X_te - mu) / sd)
         proba = model.predict_proba((X_te - mu) / sd)[:, 1]
     else:
         w = y_tr.map(len(y_tr) / (2 * y_tr.value_counts())).values
+        if sw is not None:
+            w = w * sw
         model.fit(X_tr, y_tr, sample_weight=w)
         pred = model.predict(X_te)
         proba = model.predict_proba(X_te)[:, 1]

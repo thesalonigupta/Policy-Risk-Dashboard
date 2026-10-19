@@ -344,3 +344,31 @@ def test_enforcement_events_file_and_reactions():
     tbl, summ = enforcement.reactions(px_, events, benchmark="XLF", pre=1, post=5)
     assert len(tbl) == 1 and tbl.loc[0, "car"] < -0.05 and tbl.loc[0, "p_value"] < 0.05
     assert summ["n"] == 1 and summ["share_negative"] == 1.0
+
+
+def test_mitigation_reweighing_and_thresholds():
+    from analysis import fairness, mitigation
+
+    rng = np.random.default_rng(11)
+    n = 6000
+    g = rng.choice(["A", "B"], n, p=[0.6, 0.4])
+    income = rng.normal(100, 25, n) - 18 * (g == "B")            # group B has lower incomes on average
+    ltv = rng.normal(80, 8, n)
+    p = 1 / (1 + np.exp(-(income - 90) / 12 - (85 - ltv) / 10))
+    df = pd.DataFrame({"group": g, "income_k": income, "loan_amount_k": rng.normal(300, 60, n), "dti": rng.normal(35, 6, n),
+                       "ltv": ltv, "tract_income_pct": rng.normal(100, 20, n), "approved": (rng.random(n) < p).astype(int)})
+
+    w = fairness.reweighing_weights(df["group"], df["approved"])
+    # after reweighing, the weighted approval rate is the same in every group
+    wr = pd.Series(w * df["approved"]).groupby(df["group"]).sum() / pd.Series(w).groupby(df["group"]).sum()
+    assert abs(wr["A"] - wr["B"]) < 1e-9
+
+    cmp_ = mitigation.compare(df, "A")
+    base = cmp_[cmp_.approach == "Baseline model"].iloc[0]
+    rw = cmp_[cmp_.approach == "Reweighing the training data"].iloc[0]
+    gt = cmp_[cmp_.kind == "Group thresholds"].iloc[0]
+    assert rw["min_di"] > base["min_di"]                      # reweighing narrows the gap
+    assert gt["min_di"] > 0.95 and not gt["usable_in_practice"]   # forced equal rates, flagged as not usable
+    assert gt["accuracy"] <= base["accuracy"] + 0.02          # equalizing rates should not improve accuracy
+    fr_ = mitigation.threshold_frontier(fairness.train_model(df)[1], "A")
+    assert fr_["cutoff"].is_monotonic_increasing and len(fr_) > 5
