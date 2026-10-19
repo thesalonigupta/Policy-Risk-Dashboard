@@ -816,7 +816,7 @@ with tab_ai:
                               title=f"{ui.ticker_label(tk_ai)}: abnormal return vs. the S&P 500 (5 days before to 10 days after)",
                               labels={"car": "Cumulative abnormal return", "label": "", "direction": ""})
                 figa.update_xaxes(tickformat=".0%")
-                                st.plotly_chart(figa, width="stretch")
+                st.plotly_chart(figa, width="stretch")
                 grp = rx_ai.groupby("direction")["car"].agg(["count", "mean"]).reset_index()
                 st.dataframe(grp.assign(mean=grp["mean"].map("{:+.2%}".format)).rename(columns={"direction": "Direction", "count": "Events", "mean": "Average"}),
                              hide_index=True, width="stretch")
