@@ -87,18 +87,26 @@ def html_to_lines(path: Path) -> list[str]:
     return [ln for ln in lines if ln]
 
 
-def extract_risk_factors(lines: list[str]) -> str:
+def extract_risk_factors(lines: list[str], extra_end: str | None = None) -> str:
     """Return the Item 1A section.
 
     Filings name the section twice (table of contents, then the real heading). Take the
     start whose span to the next end heading is longest; the table-of-contents span is tiny.
     """
+    extra = re.compile(extra_end, re.I) if extra_end else None   # for filers whose headings differ from the standard items
     starts = [i for i, ln in enumerate(lines) if START.match(ln)]
-    ends = [i for i, ln in enumerate(lines) if END.match(ln)]
+    ends = [i for i, ln in enumerate(lines) if END.match(ln) or (extra and extra.match(ln))]
     best = None
     for s in starts:
         nxt = next((e for e in ends if e > s), None)
-        if nxt is not None and (best is None or nxt - s > best[1] - best[0]):
+        if nxt is None:
+            continue
+        if extra:
+            # With custom end headings the table-of-contents entry can look long, so take the
+            # last heading that has a real section (100+ lines) after it.
+            if nxt - s >= 100:
+                best = (s, nxt)
+        elif best is None or nxt - s > best[1] - best[0]:
             best = (s, nxt)
     if best is None or best[1] - best[0] < 100:
         raise ValueError("Could not locate a Risk Factors section")

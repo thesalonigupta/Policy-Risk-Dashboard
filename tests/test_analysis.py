@@ -241,3 +241,16 @@ def test_employer_year_summary_adds_up():
     ey = pm.build_summaries(df)["employer_year"]
     assert abs(ey["total"].sum() - df["amount"].sum()) < 1e-6 and ey["donations"].sum() == len(df)
     assert "donor_name" not in ey.columns
+
+
+def test_extract_risk_factors_custom_end_skips_table_of_contents():
+    from analysis import edgar
+
+    body = ["Some risk sentence about markets."] * 150
+    lines = (["Table of Contents", "Risk Factors", "Cybersecurity", "Business", "Details"] +
+             ["Intro text"] * 20 + ["Risk Factors"] + body + ["Cybersecurity", "Other text"])
+    out = edgar.extract_risk_factors(lines, r"^cybersecurity$")
+    assert out.count("Some risk sentence") == 150 and "Intro text" not in out
+    # standard filers (no override) still work: longest span after a Risk Factors heading
+    std = ["Item 1A. Risk Factors", "Item 1B. Unresolved Staff Comments"] + ["x"] * 5 + ["Risk Factors"] + body + ["Item 1B. Unresolved Staff Comments"]
+    assert edgar.extract_risk_factors(std).count("Some risk sentence") == 150

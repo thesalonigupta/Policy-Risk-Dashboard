@@ -144,6 +144,8 @@ lob, lob_is_demo = load("lobbying.csv")
 prices_saved, px_is_demo = load("prices.csv")
 events_saved, _ = load("events.csv")
 fil, fil_is_demo = load("filings.csv")
+if "group" not in fil:
+    fil["group"] = "Core firm"
 lend, lend_is_demo = load("lending.csv")
 scored = score_filings_cached(fil)
 
@@ -167,7 +169,7 @@ ui.hero(
 # ------------------------------------------------------------------ at a glance
 if all_real:
     st.subheader("At a glance")
-    cards = [ui.money_takeaway(summ, pm), ui.market_takeaway(prices_saved, events_saved, market), ui.filings_takeaway(scored, filings)]
+    cards = [ui.money_takeaway(summ, pm), ui.market_takeaway(prices_saved, events_saved, market), ui.filings_takeaway(scored[scored["group"] == "Core firm"], filings)]
     ref_default = "White (non-Hispanic)" if "White (non-Hispanic)" in set(lend["group"]) else sorted(lend["group"].unique())[0]
     _, g_test, _ = lending_model(lend, "logistic")
     cards.append(ui.lending_takeaway(fairness.audit(g_test, ref_default), ref_default))
@@ -198,7 +200,7 @@ if all_real:
             f"Policy and bank-stress events can move financial stocks together. Around {_be['event']} ({_be['date']}), financials moved "
             f"{_be['car']:+.1%} against the market, {_how}. That points to a real reaction, though not to what caused it."
         )
-    _ai = biggest_ai_change(fil)
+    _ai = biggest_ai_change(fil[fil["group"] == "Core firm"])
     if _ai:
         points.append(
             f"AI is a changing risk topic, not just a bigger one. {_ai['company']}'s FY{_ai['y1']} filing adds {_ai['added']} "
@@ -459,13 +461,27 @@ with tab3:
             f"{int(fil['year'].min())}-{int(fil['year'].max())}."
         )
     cat = st.radio("Risk language category", list(filings.LEXICONS), horizontal=True)
-    tr = filings.trend(scored, cat).melt(id_vars="year", var_name="company", value_name="per_1k")
+    has_peers = (scored["group"] == "Peer").any()
+    inc_peers = st.toggle("Include bank and asset-manager peers in the trend chart", value=False) if has_peers else False
+    scored_v = scored if inc_peers else scored[scored["group"] == "Core firm"]
+    tr = filings.trend(scored_v, cat).melt(id_vars="year", var_name="company", value_name="per_1k")
     st.plotly_chart(
         px.line(tr, x="year", y="per_1k", color="company", markers=True,
                 title=f"{cat} risk language, mentions per 1,000 words",
                 labels={"per_1k": "Mentions per 1,000 words", "year": "Fiscal year"}),
         width="stretch",
     )
+    if has_peers:
+        latest = scored.sort_values("year").groupby("company").tail(1).copy()
+        latest["label"] = latest["company"] + " (FY" + latest["year"].astype(int).astype(str) + ")"
+        latest = latest.sort_values(f"{cat}_per_1k")
+        figl = px.bar(latest, x=f"{cat}_per_1k", y="label", color="group", orientation="h",
+                      color_discrete_map={"Core firm": ui.NAVY, "Peer": "#9AA8B5"},
+                      title=f"{cat} risk language in each firm's latest 10-K, mentions per 1,000 words",
+                      labels={f"{cat}_per_1k": "Mentions per 1,000 words", "label": "", "group": ""})
+        st.plotly_chart(figl, width="stretch")
+        st.caption("Latest available fiscal year for each company. Differences in how firms organize their risk sections "
+                   "affect these counts, so compare patterns more than exact values.")
     with st.expander("Full score table"):
         st.dataframe(scored, hide_index=True, width="stretch")
 
@@ -565,7 +581,7 @@ with tab5:
         ["Lobbying", "Senate Lobbying Disclosure Act filings, 2023-24", "Static", "Amounts are reported rounded; amended filings replace originals."],
         ["Market", "Yahoo Finance adjusted closes: GS, JPM, BLK; peers MS, C, BAC, WFC, STT, BX, TROW; plus XLF and SPY", "Daily refresh plus hourly live toggle", "Prices can lag or be revised."],
         ["Regulator rules", "Federal Register API: significant rules and proposals from the Fed, SEC, OCC, FDIC, CFPB", "Daily refresh; live when available", "Publication date, not announcement date."],
-        ["Filings", "SEC EDGAR 10-K Item 1A Risk Factors, FY2020-2025", "Static", "Keyword counts, not meaning. Section rewrites change scores."],
+        ["Filings", "SEC EDGAR 10-K risk-factor sections, FY2020-2025: the three core firms plus peers Bank of America, Citigroup, Morgan Stanley, State Street, Blackstone and T. Rowe Price", "Static", "Keyword counts, not meaning. Section rewrites change scores. Wells Fargo is excluded because its 10-K points to an annual-report exhibit instead of containing risk factors."],
         ["Lending", "CFPB HMDA 2024 New Jersey mortgages", "Static", "One state, one year; only fields available in the public file."],
     ], columns=["Tab", "Source", "Updates", "Main limitation"]), hide_index=True, width="stretch")
 
@@ -599,7 +615,11 @@ with tab5:
         "Heavy rewording can still look like a change.\n"
         "- **Fairness model.** Class-balanced so it does not simply approve everyone; results change with model choice. "
         "It is a screening exercise on 2024 New Jersey mortgages only, not a claim about any real lender.\n"
-        "- **Peers.** Bank and asset-manager peers appear in the Market tab. Donations, lobbying and filings cover only Goldman Sachs, "
-        "JPMorgan Chase and BlackRock so far.\n"
+        "- **Peers.** Bank and asset-manager peers appear in the Market tab (prices) and the Filing language tab (10-K risk sections). "
+        "Donations and lobbying cover only Goldman Sachs, JPMorgan Chase and BlackRock. Wells Fargo has prices but no filing text, "
+        "because its 10-K points to an annual-report exhibit rather than containing risk factors.\n"
+        "- **Comparing filings across firms.** Firms organize risk sections differently (Blackstone's is about three times the length of "
+        "Morgan Stanley's because it also covers its funds), and each section was located by its headings. Per-1,000-word scores adjust for length, "
+        "but compare patterns across firms rather than exact values.\n"
         "- **Not advice.** This is an analysis tool. It does not recommend trades, and associations here are not causal claims."
     )

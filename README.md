@@ -37,7 +37,7 @@ Any file placed in `data/real/` with the same name overrides its demo version.
 | Political money | `lobbying.csv` | Senate lobbying disclosures (LDA, lda.gov API; real 2023-24 totals for the three firms) | sector, year, spend_millions |
 | Market | `prices.csv` | `market.load_prices_yfinance(["XLF","SPY"], start, end)` then save to CSV | date + one column per ticker |
 | Market | `events.csv` | You write it | date, event, ticker |
-| Filings | `filings.csv` | Risk-factor sections from SEC EDGAR 10-Ks | company, sector, year, text |
+| Filings | `filings.csv` | Risk-factor sections from SEC EDGAR 10-Ks (`fetch_filings.py`; add `--peers-only` for peers; needs `SEC_USER_AGENT`) | company, sector, group, year, text |
 | Lending | `lending.csv` | CFPB HMDA data (built here from the 2024 New Jersey file, see below) | group, income_k, loan_amount_k, dti, ltv, tract_income_pct, approved (0/1) |
 
 **Finance-firm donations (what this repo was built with).** Export individual contributions from the FEC
