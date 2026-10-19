@@ -10,7 +10,7 @@ import plotly.express as px
 import streamlit as st
 
 import ui
-from analysis import fairness, federal_register as fr, filings, market, political_money as pm, rule_study
+from analysis import ai_policy, fairness, federal_register as fr, filings, market, political_money as pm, rule_study, themes
 
 ROOT = Path(__file__).parent
 REAL, DEMO, PUBLIC = ROOT / "data" / "real", ROOT / "data" / "demo", ROOT / "data" / "public"
@@ -94,6 +94,17 @@ def rule_study_cached(prices, rules, ticker, benchmark):
     ev = rule_study.event_cars(prices, rules, ticker, benchmark)
     pool = rule_study.placebo_pool(prices, ticker, benchmark, ev["date"]) if len(ev) else []
     return ev, pool
+
+
+
+@st.cache_data(show_spinner="Reading filings for new themes...")
+def themes_cached(fil):
+    return themes.first_mentions(fil), *themes.topic_model(fil)
+
+
+@st.cache_data(show_spinner="Measuring AI events...")
+def ai_reactions_cached(prices, events, ticker, benchmark):
+    return ai_policy.event_reactions(prices, events, ticker, benchmark)
 
 
 @st.cache_data(show_spinner=False)
@@ -224,8 +235,8 @@ if all_real:
 else:
     st.caption("Parts of this dashboard are running on synthetic demo data, so the summary row is hidden.")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["Political money", "Market reaction", "Filing risk language", "Lending fairness", "Methods & limits"]
+tab1, tab2, tab3, tab_ai, tab4, tab5 = st.tabs(
+    ["Political money", "Market reaction", "Filing risk language", "AI policy & themes", "Lending fairness", "Methods & limits"]
 )
 
 # ------------------------------------------------------------------ Tab 1
@@ -609,6 +620,141 @@ with tab3:
                 st.write("• " + x)
             if len(dd["removed"]) > 15:
                 st.caption(f"Showing 15 of {len(dd['removed'])}.")
+
+# ------------------------------------------------------------------ AI policy & themes
+with tab_ai:
+    ai_path = PUBLIC / "ai_events.csv"
+    ui.explain(
+        "AI rules are changing fast. This tab lines up key AI policy events with what the banks wrote in their annual reports, "
+        "what they lobbied on, and how their stocks moved.",
+        "Each event has a date and a source. 'Tighter' means it adds obligations for firms that use AI, 'Looser' means it removes "
+        "or drops them, 'Neutral' means it gathers information. That label is my reading, not an official category.",
+        "Annual reports come once a year, so any link between an event and the wording is loose. AI talk rose everywhere at once "
+        "after ChatGPT arrived, so the data cannot separate 'policy made them write about it' from 'everyone started writing about AI'.",
+    )
+    if not ai_path.exists() or fil_is_demo:
+        st.info("This tab needs the real filings and the AI events file.")
+    else:
+        ai_ev = ai_policy.load_events(ai_path)
+
+        st.subheader("Key AI policy events")
+        figt = px.scatter(ai_ev, x="date", y="region", color="direction", hover_name="event",
+                          color_discrete_map={"Tighter": ui.BRICK, "Looser": ui.TEAL, "Neutral": "#9AA8B5"},
+                          labels={"date": "", "region": "", "direction": ""}, title="AI policy events (hover for details)")
+        figt.update_traces(marker=dict(size=14), hovertemplate="%{hovertext}<br>%{x|%b %d, %Y}<extra></extra>")
+        figt.update_yaxes(categoryorder="array", categoryarray=["EU", "US"])
+        st.plotly_chart(figt, width="stretch")
+        with st.expander("List of events and sources"):
+            lst = ai_ev.assign(Date=ai_ev["date"].dt.strftime("%Y-%m-%d"))[["Date", "event", "region", "direction", "url"]]
+            st.dataframe(lst.rename(columns={"event": "Event", "region": "Region", "direction": "Direction", "url": "Source"}),
+                         hide_index=True, width="stretch",
+                         column_config={"Source": st.column_config.LinkColumn("Source", display_text="open")})
+
+        st.subheader("How much the banks write about AI")
+        dens = ai_policy.ai_density(scored)
+        show_peers = st.toggle("Include peers", value=True, key="ai_peers")
+        d_show = dens if show_peers else dens[dens["group"] == "Core firm"]
+        figd = px.line(d_show, x="year", y="AI_per_1k", color="company", markers=True,
+                       title="AI keyword mentions per 1,000 words in the Risk Factors section",
+                       labels={"AI_per_1k": "Mentions per 1,000 words", "year": "Fiscal year", "company": ""})
+        figd.update_xaxes(dtick=1)
+        pick_ev = st.multiselect("Mark events on the chart", ai_ev["event"].tolist(),
+                                 default=[e for e in ai_ev["event"] if e.startswith(("Executive Order 14110", "EU AI Act enters", "Executive Order 14179"))],
+                                 key="ai_mark")
+        for r in ai_ev[ai_ev["event"].isin(pick_ev)].itertuples():
+            pos = r.date.year - 0.5 + (r.date.dayofyear - 1) / 365   # place the event inside its fiscal year
+            figd.add_vline(x=pos, line_dash="dot", line_color="#555")
+            figd.add_annotation(x=pos, y=1.02, yref="paper", text=r.event[:28] + "...", showarrow=False, textangle=-60, font=dict(size=10), xanchor="left", yanchor="bottom")
+        figd.update_layout(margin=dict(t=110))
+        st.plotly_chart(figd, width="stretch")
+        yoy = ai_policy.yearly_change(dens).groupby("year")["change"].mean().reset_index()
+        biggest = yoy.loc[yoy["change"].idxmax()]
+        st.caption(f"Across all {dens['company'].nunique()} firms the biggest average jump came in fiscal {int(biggest['year'])} "
+                   f"(+{biggest['change']:.2f} mentions per 1,000 words). The AI score also counts words like 'algorithm' and 'model risk', "
+                   "so part of the baseline is older model-risk language. Dotted lines sit inside the fiscal year of the event, "
+                   "and every firm here reports on a calendar-year basis.")
+
+        st.subheader("Where the banks tie AI to regulation")
+        c1, c2 = st.columns(2)
+        who = c1.selectbox("Company", sorted(fil["company"].unique()), key="ai_sent_co")
+        yrs_c = sorted(fil.loc[fil["company"] == who, "year"].unique())
+        yr_s = c2.selectbox("Fiscal year", yrs_c, index=len(yrs_c) - 1, key="ai_sent_yr")
+        txt = fil[(fil["company"] == who) & (fil["year"] == yr_s)]["text"].iloc[0]
+        hits = ai_policy.ai_regulation_sentences(txt, limit=5)
+        if hits:
+            for h in hits:
+                st.markdown(f"> {h}")
+        else:
+            st.caption("No sentence in this filing mentions both AI and rules or regulation.")
+
+        lt = PUBLIC / "lobbying_topics.csv"
+        if lt.exists():
+            st.subheader("Lobbying on AI")
+            lobt = pd.read_csv(lt)
+            lobt = lobt[lobt["topic"] == "Artificial intelligence"]
+            lobt = lobt[lobt["year"] < lobt["year"].max()]    # leave out the partial year
+            lobt = lobt.assign(share=lobt["activities"] / lobt["total_activities"])
+            figl = px.bar(lobt, x="year", y="activities", color="firm", barmode="group",
+                          title="Lobbying activities that mention AI (Senate LDA filings)",
+                          labels={"activities": "Activities", "year": "", "firm": ""},
+                          color_discrete_map={"Goldman Sachs": ui.NAVY, "JPMorgan Chase": ui.BRICK, "BlackRock": ui.TEAL})
+            figl.update_xaxes(dtick=1)
+            st.plotly_chart(figl, width="stretch")
+            st.caption("AI lobbying starts in 2023-24 for JPMorgan and BlackRock. Goldman's filings never mention AI in the text "
+                       "of its descriptions, which may mean it lobbies on it under broader labels. Complete years only.")
+
+        st.subheader("Did stocks react to AI policy events?")
+        if px_is_demo:
+            st.info("Needs real price data.")
+        else:
+            cols_p = [c for c in prices_saved.columns if c != "date"]
+            tk_ai = st.selectbox("Stock or fund", [c for c in cols_p if c != "SPY"], index=[c for c in cols_p if c != "SPY"].index("XLF") if "XLF" in cols_p else 0,
+                                 format_func=ui.ticker_label, key="ai_tk")
+            rx_ai = ai_reactions_cached(prices_saved, ai_ev, tk_ai, "SPY")
+            if rx_ai.empty:
+                st.info("Not enough price history around these events.")
+            else:
+                figa = px.bar(rx_ai.assign(label=rx_ai["date"] + "  " + rx_ai["event"].str[:42]), x="car", y="label", color="direction", orientation="h",
+                              color_discrete_map={"Tighter": ui.BRICK, "Looser": ui.TEAL, "Neutral": "#9AA8B5"},
+                              title=f"{ui.ticker_label(tk_ai)}: abnormal return vs. the S&P 500 (5 days before to 10 days after)",
+                              labels={"car": "Cumulative abnormal return", "label": "", "direction": ""})
+                figa.update_xaxes(tickformat=".0%")
+                figa.update_yaxes(autorange="reversed")
+                st.plotly_chart(figa, width="stretch")
+                grp = rx_ai.groupby("direction")["car"].agg(["count", "mean"]).reset_index()
+                st.dataframe(grp.assign(mean=grp["mean"].map("{:+.2%}".format)).rename(columns={"direction": "Direction", "count": "Events", "mean": "Average"}),
+                             hide_index=True, width="stretch")
+                st.caption(f"{len(rx_ai)} events, so a p-value of 0.05 would show up by chance for about one event in twenty. "
+                           f"The smallest p-value here is {rx_ai['p_value'].min():.2f}. Several EU events were announced long before their dates, "
+                           "and US market hours differ from EU announcement times, so treat all of this as descriptive.")
+
+        st.subheader("Which new risks showed up, and when")
+        fm, topics, prev = themes_cached(fil)
+        piv = fm.pivot(index="company", columns="term", values="first_year")
+        figf = px.imshow(piv, text_auto=".0f", aspect="auto", color_continuous_scale=[[0, ui.NAVY], [1, "#E8EEF4"]],
+                         labels=dict(color="First year"), title="First fiscal year each firm's risk section mentions the term")
+        figf.update_xaxes(side="top", tickangle=-30)
+        figf.update_coloraxes(showscale=False)
+        st.plotly_chart(figf, width="stretch")
+        st.caption("Blank means never mentioned in the filings I have (2020 onward). 2020 means it was already there in the earliest filing, "
+                   "so the true first mention may be earlier. Matches are keyword-based and can include unrelated uses.")
+        gen = fm[fm["term"] == "Generative AI"].dropna(subset=["first_year"]).sort_values(["first_year", "company"])
+        if not gen.empty:
+            st.markdown("**Generative AI** first appears in: " + "; ".join(f"{r.company} ({int(r.first_year)})" for r in gen.itertuples()) + ".")
+
+        with st.expander("What do the risk sections talk about overall? (topic model)"):
+            st.caption("An algorithm groups sentences by the words they share. The labels are the most distinctive words in each group, "
+                       "not my interpretation. Shares show the portion of sentences that fit each group best.")
+            tp = prev.merge(topics, on="topic")
+            tp["label"] = "T" + tp["topic"].astype(str) + ": " + tp["top_words"].str.split(", ").str[:3].str.join(", ")
+            gsel = st.radio("Firms", ["Core firm", "Peer"], horizontal=True, key="topic_group")
+            figp = px.area(tp[tp["group"] == gsel], x="year", y="share", color="label", labels={"share": "Share of sentences", "year": "", "label": ""})
+            figp.update_yaxes(tickformat=".0%")
+            figp.update_xaxes(dtick=1)
+            st.plotly_chart(figp, width="stretch")
+            st.dataframe(topics.rename(columns={"topic": "Topic", "top_words": "Most distinctive words"}), hide_index=True, width="stretch")
+            st.caption("The mix barely moves from year to year. Newly arriving risks like AI are a small slice of a long, stable document, "
+                       "which is why the term-level view above is more informative.")
 
 # ------------------------------------------------------------------ Tab 4
 with tab4:

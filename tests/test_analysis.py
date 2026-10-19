@@ -299,3 +299,27 @@ def test_lda_activities_and_keyword_counts():
     # "AI Act" style false positives and plain words must not match
     assert not lda.by_keyword(lda.activities([{"filing_uuid": "c", "filing_year": 2024, "filing_period": "q", "lobbying_activities": [
         {"general_issue_code": "FIN", "general_issue_code_display": "F", "description": "said the plan"}]}], "X")).set_index("topic").loc["Artificial intelligence", "activities"]
+
+
+def test_ai_policy_and_themes():
+    from analysis import ai_policy, themes
+
+    ev = ai_policy.load_events(Path(__file__).resolve().parents[1] / "data" / "public" / "ai_events.csv")
+    assert ev["date"].is_monotonic_increasing and set(ev["direction"]) <= {"Tighter", "Looser", "Neutral"}
+    assert ev["url"].str.startswith("https://").all() and len(ev) >= 8
+
+    sents = ai_policy.ai_regulation_sentences(
+        "Our use of artificial intelligence may subject us to new laws and regulation in several jurisdictions. "
+        "We lease office space in many cities around the world today. "
+        "Machine learning models are used in credit decisions across the business every day.")
+    assert len(sents) == 1 and "laws" in sents[0]
+
+    df = pd.DataFrame({
+        "company": ["A", "A", "B", "B"], "group": "Core firm", "year": [2022, 2023, 2022, 2023],
+        "text": ["Climate change may affect us. " * 3, "Generative AI and large language models create risk. " * 3,
+                 "Markets move. " * 3, "Markets move. " * 3]})
+    fm = themes.first_mentions(df)
+    g = fm[(fm.company == "A") & (fm.term == "Generative AI")].iloc[0]
+    assert g["first_year"] == 2023
+    assert np.isnan(fm[(fm.company == "B") & (fm.term == "Generative AI")].iloc[0]["first_year"])
+    assert themes.adoption_order(fm, "Climate").iloc[0]["company"] == "A"
