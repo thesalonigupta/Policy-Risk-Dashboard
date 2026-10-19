@@ -280,3 +280,22 @@ def test_rule_study_permutation_detects_a_systematic_effect():
     ev2 = rs.event_cars(px_, fake, "XLF")
     s2 = rs.summarize(ev2, pool, "agency_group")
     assert s2.loc[0, "p_value"] > 0.01
+
+
+def test_lda_activities_and_keyword_counts():
+    from analysis import lda
+
+    filings = [{"filing_uuid": "a", "filing_year": 2024, "filing_period": "first_quarter", "lobbying_activities": [
+        {"general_issue_code": "FIN", "general_issue_code_display": "Financial", "description": "Generative AI and stablecoin bills"},
+        {"general_issue_code": "TAX", "general_issue_code_display": "Taxation", "description": "Carried interest"}]},
+        {"filing_uuid": "b", "filing_year": 2024, "filing_period": "second_quarter", "lobbying_activities": [
+            {"general_issue_code": "FIN", "general_issue_code_display": "Financial", "description": "Basel III endgame capital rule"}]}]
+    acts = lda.activities(filings, "X")
+    codes = lda.by_issue_code(acts)
+    assert codes.set_index("code")["activities"].to_dict() == {"FIN": 2, "TAX": 1}
+    kw = lda.by_keyword(acts).set_index("topic")["activities"]
+    assert kw["Artificial intelligence"] == 1 and kw["Crypto / digital assets"] == 1 and kw["Capital & bank rules"] == 1
+    assert (lda.by_keyword(acts)["total_activities"] == 3).all()
+    # "AI Act" style false positives and plain words must not match
+    assert not lda.by_keyword(lda.activities([{"filing_uuid": "c", "filing_year": 2024, "filing_period": "q", "lobbying_activities": [
+        {"general_issue_code": "FIN", "general_issue_code_display": "F", "description": "said the plan"}]}], "X")).set_index("topic").loc["Artificial intelligence", "activities"]

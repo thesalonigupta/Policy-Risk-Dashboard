@@ -1,0 +1,109 @@
+firm,year,topic,activities,total_activities
+BlackRock,2021,Artificial intelligence,0,41
+BlackRock,2021,Crypto / digital assets,0,41
+BlackRock,2021,Capital & bank rules,0,41
+BlackRock,2021,Climate / ESG,10,41
+BlackRock,2021,Consumer & lending,0,41
+BlackRock,2021,Market structure,0,41
+BlackRock,2022,Artificial intelligence,0,66
+BlackRock,2022,Crypto / digital assets,2,66
+BlackRock,2022,Capital & bank rules,1,66
+BlackRock,2022,Climate / ESG,8,66
+BlackRock,2022,Consumer & lending,0,66
+BlackRock,2022,Market structure,4,66
+BlackRock,2023,Artificial intelligence,0,78
+BlackRock,2023,Crypto / digital assets,5,78
+BlackRock,2023,Capital & bank rules,5,78
+BlackRock,2023,Climate / ESG,7,78
+BlackRock,2023,Consumer & lending,0,78
+BlackRock,2023,Market structure,5,78
+BlackRock,2024,Artificial intelligence,6,96
+BlackRock,2024,Crypto / digital assets,4,96
+BlackRock,2024,Capital & bank rules,4,96
+BlackRock,2024,Climate / ESG,4,96
+BlackRock,2024,Consumer & lending,0,96
+BlackRock,2024,Market structure,4,96
+BlackRock,2025,Artificial intelligence,8,125
+BlackRock,2025,Crypto / digital assets,12,125
+BlackRock,2025,Capital & bank rules,4,125
+BlackRock,2025,Climate / ESG,3,125
+BlackRock,2025,Consumer & lending,0,125
+BlackRock,2025,Market structure,4,125
+BlackRock,2026,Artificial intelligence,4,59
+BlackRock,2026,Crypto / digital assets,7,59
+BlackRock,2026,Capital & bank rules,2,59
+BlackRock,2026,Climate / ESG,0,59
+BlackRock,2026,Consumer & lending,0,59
+BlackRock,2026,Market structure,2,59
+Goldman Sachs,2021,Artificial intelligence,0,50
+Goldman Sachs,2021,Crypto / digital assets,0,50
+Goldman Sachs,2021,Capital & bank rules,0,50
+Goldman Sachs,2021,Climate / ESG,0,50
+Goldman Sachs,2021,Consumer & lending,0,50
+Goldman Sachs,2021,Market structure,6,50
+Goldman Sachs,2022,Artificial intelligence,0,48
+Goldman Sachs,2022,Crypto / digital assets,0,48
+Goldman Sachs,2022,Capital & bank rules,0,48
+Goldman Sachs,2022,Climate / ESG,0,48
+Goldman Sachs,2022,Consumer & lending,0,48
+Goldman Sachs,2022,Market structure,4,48
+Goldman Sachs,2023,Artificial intelligence,0,51
+Goldman Sachs,2023,Crypto / digital assets,0,51
+Goldman Sachs,2023,Capital & bank rules,0,51
+Goldman Sachs,2023,Climate / ESG,0,51
+Goldman Sachs,2023,Consumer & lending,0,51
+Goldman Sachs,2023,Market structure,4,51
+Goldman Sachs,2024,Artificial intelligence,0,44
+Goldman Sachs,2024,Crypto / digital assets,0,44
+Goldman Sachs,2024,Capital & bank rules,2,44
+Goldman Sachs,2024,Climate / ESG,0,44
+Goldman Sachs,2024,Consumer & lending,0,44
+Goldman Sachs,2024,Market structure,4,44
+Goldman Sachs,2025,Artificial intelligence,0,46
+Goldman Sachs,2025,Crypto / digital assets,8,46
+Goldman Sachs,2025,Capital & bank rules,4,46
+Goldman Sachs,2025,Climate / ESG,0,46
+Goldman Sachs,2025,Consumer & lending,0,46
+Goldman Sachs,2025,Market structure,4,46
+Goldman Sachs,2026,Artificial intelligence,0,22
+Goldman Sachs,2026,Crypto / digital assets,6,22
+Goldman Sachs,2026,Capital & bank rules,2,22
+Goldman Sachs,2026,Climate / ESG,0,22
+Goldman Sachs,2026,Consumer & lending,0,22
+Goldman Sachs,2026,Market structure,2,22
+JPMorgan Chase,2021,Artificial intelligence,0,68
+JPMorgan Chase,2021,Crypto / digital assets,0,68
+JPMorgan Chase,2021,Capital & bank rules,12,68
+JPMorgan Chase,2021,Climate / ESG,0,68
+JPMorgan Chase,2021,Consumer & lending,4,68
+JPMorgan Chase,2021,Market structure,16,68
+JPMorgan Chase,2022,Artificial intelligence,0,72
+JPMorgan Chase,2022,Crypto / digital assets,2,72
+JPMorgan Chase,2022,Capital & bank rules,12,72
+JPMorgan Chase,2022,Climate / ESG,0,72
+JPMorgan Chase,2022,Consumer & lending,6,72
+JPMorgan Chase,2022,Market structure,16,72
+JPMorgan Chase,2023,Artificial intelligence,1,78
+JPMorgan Chase,2023,Crypto / digital assets,5,78
+JPMorgan Chase,2023,Capital & bank rules,13,78
+JPMorgan Chase,2023,Climate / ESG,0,78
+JPMorgan Chase,2023,Consumer & lending,6,78
+JPMorgan Chase,2023,Market structure,17,78
+JPMorgan Chase,2024,Artificial intelligence,8,96
+JPMorgan Chase,2024,Crypto / digital assets,4,96
+JPMorgan Chase,2024,Capital & bank rules,12,96
+JPMorgan Chase,2024,Climate / ESG,0,96
+JPMorgan Chase,2024,Consumer & lending,7,96
+JPMorgan Chase,2024,Market structure,16,96
+JPMorgan Chase,2025,Artificial intelligence,7,115
+JPMorgan Chase,2025,Crypto / digital assets,4,115
+JPMorgan Chase,2025,Capital & bank rules,12,115
+JPMorgan Chase,2025,Climate / ESG,0,115
+JPMorgan Chase,2025,Consumer & lending,14,115
+JPMorgan Chase,2025,Market structure,16,115
+JPMorgan Chase,2026,Artificial intelligence,2,68
+JPMorgan Chase,2026,Crypto / digital assets,3,68
+JPMorgan Chase,2026,Capital & bank rules,6,68
+JPMorgan Chase,2026,Climate / ESG,0,68
+JPMorgan Chase,2026,Consumer & lending,7,68
+JPMorgan Chase,2026,Market structure,8,68

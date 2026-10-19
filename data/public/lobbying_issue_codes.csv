@@ -1,0 +1,127 @@
+firm,year,code,issue,activities
+BlackRock,2021,BAN,Banking,12
+BlackRock,2021,FIN,Financial Institutions/Investments/Securities,12
+BlackRock,2021,RET,Retirement,9
+BlackRock,2021,TAX,Taxation/Internal Revenue Code,8
+BlackRock,2022,BAN,Banking,16
+BlackRock,2022,FIN,Financial Institutions/Investments/Securities,25
+BlackRock,2022,RET,Retirement,14
+BlackRock,2022,TAX,Taxation/Internal Revenue Code,11
+BlackRock,2023,BAN,Banking,18
+BlackRock,2023,FIN,Financial Institutions/Investments/Securities,29
+BlackRock,2023,RET,Retirement,18
+BlackRock,2023,TAX,Taxation/Internal Revenue Code,13
+BlackRock,2024,BAN,Banking,19
+BlackRock,2024,CPI,Computer Industry,2
+BlackRock,2024,FIN,Financial Institutions/Investments/Securities,43
+BlackRock,2024,RET,Retirement,22
+BlackRock,2024,TAX,Taxation/Internal Revenue Code,10
+BlackRock,2025,BAN,Banking,19
+BlackRock,2025,CPI,Computer Industry,4
+BlackRock,2025,ENV,Environment/Superfund,4
+BlackRock,2025,FIN,Financial Institutions/Investments/Securities,46
+BlackRock,2025,RET,Retirement,36
+BlackRock,2025,TAX,Taxation/Internal Revenue Code,16
+BlackRock,2026,BAN,Banking,9
+BlackRock,2026,CPI,Computer Industry,2
+BlackRock,2026,ENG,Energy/Nuclear,1
+BlackRock,2026,FIN,Financial Institutions/Investments/Securities,22
+BlackRock,2026,RET,Retirement,18
+BlackRock,2026,TAX,Taxation/Internal Revenue Code,7
+Goldman Sachs,2021,BAN,Banking,4
+Goldman Sachs,2021,ECN,Economics/Economic Development,4
+Goldman Sachs,2021,FIN,Financial Institutions/Investments/Securities,21
+Goldman Sachs,2021,LBR,Labor Issues/Antitrust/Workplace,5
+Goldman Sachs,2021,TAX,Taxation/Internal Revenue Code,12
+Goldman Sachs,2021,TRD,Trade (domestic/foreign),4
+Goldman Sachs,2022,BAN,Banking,4
+Goldman Sachs,2022,ECN,Economics/Economic Development,4
+Goldman Sachs,2022,FIN,Financial Institutions/Investments/Securities,20
+Goldman Sachs,2022,LBR,Labor Issues/Antitrust/Workplace,4
+Goldman Sachs,2022,TAX,Taxation/Internal Revenue Code,12
+Goldman Sachs,2022,TRD,Trade (domestic/foreign),4
+Goldman Sachs,2023,BAN,Banking,4
+Goldman Sachs,2023,ECN,Economics/Economic Development,4
+Goldman Sachs,2023,FIN,Financial Institutions/Investments/Securities,25
+Goldman Sachs,2023,LBR,Labor Issues/Antitrust/Workplace,1
+Goldman Sachs,2023,TAX,Taxation/Internal Revenue Code,13
+Goldman Sachs,2023,TRD,Trade (domestic/foreign),4
+Goldman Sachs,2024,BAN,Banking,4
+Goldman Sachs,2024,ECN,Economics/Economic Development,4
+Goldman Sachs,2024,FIN,Financial Institutions/Investments/Securities,20
+Goldman Sachs,2024,TAX,Taxation/Internal Revenue Code,12
+Goldman Sachs,2024,TRD,Trade (domestic/foreign),4
+Goldman Sachs,2025,BAN,Banking,4
+Goldman Sachs,2025,ECN,Economics/Economic Development,4
+Goldman Sachs,2025,FIN,Financial Institutions/Investments/Securities,21
+Goldman Sachs,2025,SMB,Small Business,1
+Goldman Sachs,2025,TAX,Taxation/Internal Revenue Code,12
+Goldman Sachs,2025,TRD,Trade (domestic/foreign),4
+Goldman Sachs,2026,BAN,Banking,2
+Goldman Sachs,2026,ECN,Economics/Economic Development,2
+Goldman Sachs,2026,FIN,Financial Institutions/Investments/Securities,10
+Goldman Sachs,2026,TAX,Taxation/Internal Revenue Code,6
+Goldman Sachs,2026,TRD,Trade (domestic/foreign),2
+JPMorgan Chase,2021,AGR,Agriculture,4
+JPMorgan Chase,2021,BAN,Banking,16
+JPMorgan Chase,2021,BUD,Budget/Appropriations,4
+JPMorgan Chase,2021,CSP,Consumer Issues/Safety/Products,4
+JPMorgan Chase,2021,FIN,Financial Institutions/Investments/Securities,20
+JPMorgan Chase,2021,HOM,Homeland Security,8
+JPMorgan Chase,2021,SMB,Small Business,4
+JPMorgan Chase,2021,TAX,Taxation/Internal Revenue Code,8
+JPMorgan Chase,2022,AGR,Agriculture,4
+JPMorgan Chase,2022,BAN,Banking,16
+JPMorgan Chase,2022,BUD,Budget/Appropriations,4
+JPMorgan Chase,2022,CPT,Copyright/Patent/Trademark,1
+JPMorgan Chase,2022,CSP,Consumer Issues/Safety/Products,4
+JPMorgan Chase,2022,FIN,Financial Institutions/Investments/Securities,20
+JPMorgan Chase,2022,HCR,Health Issues,1
+JPMorgan Chase,2022,HOM,Homeland Security,7
+JPMorgan Chase,2022,SMB,Small Business,4
+JPMorgan Chase,2022,TAX,Taxation/Internal Revenue Code,8
+JPMorgan Chase,2022,VET,Veterans,3
+JPMorgan Chase,2023,AGR,Agriculture,4
+JPMorgan Chase,2023,BAN,Banking,17
+JPMorgan Chase,2023,BUD,Budget/Appropriations,4
+JPMorgan Chase,2023,CSP,Consumer Issues/Safety/Products,5
+JPMorgan Chase,2023,FIN,Financial Institutions/Investments/Securities,21
+JPMorgan Chase,2023,HCR,Health Issues,4
+JPMorgan Chase,2023,HOM,Homeland Security,5
+JPMorgan Chase,2023,LBR,Labor Issues/Antitrust/Workplace,3
+JPMorgan Chase,2023,SMB,Small Business,5
+JPMorgan Chase,2023,TAX,Taxation/Internal Revenue Code,9
+JPMorgan Chase,2023,TOU,Travel/Tourism,1
+JPMorgan Chase,2024,AGR,Agriculture,4
+JPMorgan Chase,2024,BAN,Banking,21
+JPMorgan Chase,2024,BUD,Budget/Appropriations,5
+JPMorgan Chase,2024,CSP,Consumer Issues/Safety/Products,4
+JPMorgan Chase,2024,FIN,Financial Institutions/Investments/Securities,34
+JPMorgan Chase,2024,HCR,Health Issues,4
+JPMorgan Chase,2024,HOM,Homeland Security,4
+JPMorgan Chase,2024,SMB,Small Business,4
+JPMorgan Chase,2024,TAX,Taxation/Internal Revenue Code,12
+JPMorgan Chase,2024,TOU,Travel/Tourism,4
+JPMorgan Chase,2025,AGR,Agriculture,4
+JPMorgan Chase,2025,BAN,Banking,31
+JPMorgan Chase,2025,BUD,Budget/Appropriations,4
+JPMorgan Chase,2025,CSP,Consumer Issues/Safety/Products,4
+JPMorgan Chase,2025,FIN,Financial Institutions/Investments/Securities,37
+JPMorgan Chase,2025,HCR,Health Issues,3
+JPMorgan Chase,2025,HOM,Homeland Security,4
+JPMorgan Chase,2025,SMB,Small Business,4
+JPMorgan Chase,2025,TAX,Taxation/Internal Revenue Code,20
+JPMorgan Chase,2025,TOU,Travel/Tourism,4
+JPMorgan Chase,2026,AGR,Agriculture,2
+JPMorgan Chase,2026,BAN,Banking,17
+JPMorgan Chase,2026,BUD,Budget/Appropriations,4
+JPMorgan Chase,2026,CSP,Consumer Issues/Safety/Products,2
+JPMorgan Chase,2026,DEF,Defense,2
+JPMorgan Chase,2026,ENG,Energy/Nuclear,1
+JPMorgan Chase,2026,FIN,Financial Institutions/Investments/Securities,19
+JPMorgan Chase,2026,HOM,Homeland Security,4
+JPMorgan Chase,2026,HOU,Housing,2
+JPMorgan Chase,2026,PHA,Pharmacy,1
+JPMorgan Chase,2026,SMB,Small Business,2
+JPMorgan Chase,2026,TAX,Taxation/Internal Revenue Code,10
+JPMorgan Chase,2026,TOU,Travel/Tourism,2

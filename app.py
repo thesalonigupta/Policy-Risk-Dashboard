@@ -311,6 +311,44 @@ with tab1:
             st.caption("Lobbying is reported by the company; donations are what its employees gave personally. "
                        "The two are different channels, so the ratio is context, not a like-for-like comparison.")
 
+    codes_path, topics_path = PUBLIC / "lobbying_issue_codes.csv", PUBLIC / "lobbying_topics.csv"
+    if codes_path.exists() and topics_path.exists():
+        st.subheader("What they lobby on")
+        ui.explain(
+            "Lobbying filings list which issues each firm lobbied on. This shows where their attention goes and how it shifts over time.",
+            "Each bar counts 'lobbying activities': one issue listed on one quarterly filing. More activities means the issue "
+            "shows up more often across filings, not more dollars (filings report money in total, not per issue).",
+            "Counts also depend on how many filings and outside lobbying firms a company uses, so compare shares over time more than "
+            "raw counts across firms. The latest year is partial. BlackRock's filings appear under its lobbying entity, BlackRock Funds Services Group.",
+        )
+        codes, topics = pd.read_csv(codes_path), pd.read_csv(topics_path)
+        yrs = sorted(codes["year"].unique())
+        yr = st.select_slider("Year", options=yrs, value=yrs[-2] if len(yrs) > 1 else yrs[-1], key="lda_year")
+        top = (codes[codes["year"] == yr].sort_values("activities", ascending=False)
+               .groupby("firm").head(6))
+        figi = px.bar(top, x="activities", y="issue", color="firm", facet_col="firm", orientation="h",
+                      title=f"Top lobbying issues, {yr}", labels={"activities": "Lobbying activities", "issue": ""},
+                      color_discrete_map={"Goldman Sachs": ui.NAVY, "JPMorgan Chase": ui.BRICK, "BlackRock": ui.TEAL})
+        figi.update_yaxes(categoryorder="total ascending", matches=None, showticklabels=True)
+        figi.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+        figi.update_layout(showlegend=False)
+        st.plotly_chart(figi, width="stretch")
+        topics = topics.assign(share=topics["activities"] / topics["total_activities"])
+        topics = topics[topics["year"] < max(yrs)] if topics["year"].nunique() > 2 else topics   # drop the partial year
+        pick = st.multiselect("Topics to track", sorted(topics["topic"].unique()),
+                              default=["Artificial intelligence", "Crypto / digital assets"], key="lda_topics")
+        tp = topics[topics["topic"].isin(pick)]
+        if not tp.empty:
+            figt = px.line(tp, x="year", y="share", color="firm", line_dash="topic", markers=True,
+                           title="Share of each firm's lobbying activities that mention the topic",
+                           labels={"share": "Share of activities", "year": "", "topic": "Topic"},
+                           color_discrete_map={"Goldman Sachs": ui.NAVY, "JPMorgan Chase": ui.BRICK, "BlackRock": ui.TEAL})
+            figt.update_yaxes(tickformat=".0%")
+            figt.update_xaxes(dtick=1)
+            st.plotly_chart(figt, width="stretch")
+            st.caption("A topic counts when its keywords appear in the activity's free-text description (see Methods). "
+                       "Complete years only. Keyword matching can miss synonyms and can catch unrelated uses.")
+
     st.subheader("Coordinated-giving flags")
     min_gifts = st.slider("Minimum identical gifts on one day", 5, 60, 10)
     skip_pac = st.checkbox("Ignore gifts to the employer's own PAC (routine payroll deductions)", value=True)
