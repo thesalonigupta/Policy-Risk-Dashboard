@@ -165,3 +165,9 @@ def test_sentences_strip_leading_bullets():
     out = filings.sentences_with_term(text, "AI")
     assert out and not out[0].startswith(("•", " "))
     assert out[0].startswith("The development")
+
+
+def test_sentences_strip_glued_headers():
+    text = "AND SUBSIDIARIES The development and use of AI present risks and challenges. SEC rules on AI are evolving quickly."
+    out = filings.sentences_with_term(text, "AI")
+    assert out[0].startswith("The development") and out[1].startswith("SEC rules")

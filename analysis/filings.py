@@ -47,13 +47,27 @@ def trend(scored: pd.DataFrame, category: str) -> pd.DataFrame:
     return scored.pivot_table(index="year", columns="company", values=col, aggfunc="mean").reset_index()
 
 
+_BULLETS = re.compile(r"^[\s•·▪●‣\-–—]+")
+# page or section headers (e.g. "AND SUBSIDIARIES", "MARKET AND COMPETITION RISKS") sometimes
+# get glued to the front of the next sentence when the filing is converted to text
+_CAPS_HEADER = re.compile(r"^(?:[A-Z][A-Z&,.'’/()0-9\-]*\s+){2,}(?=[A-Z][a-z])")
+
+
+def _clean_sentence(s: str) -> str:
+    s = _BULLETS.sub("", s).strip()
+    m = _CAPS_HEADER.match(s)
+    if m and len(s[m.end():].split()) >= 5:
+        s = s[m.end():]
+    return s
+
+
 def sentences_with_term(text: str, category: str, limit: int = 5) -> list[str]:
     """Return up to `limit` sentences containing a lexicon hit, for transparency."""
     patterns = LEXICONS[category]
     hits = []
     for s in re.split(r"(?<=[.!?])\s+", text):
         if any(re.search(p, s, flags=re.IGNORECASE) for p in patterns):
-            hits.append(re.sub(r"^[\s•·▪●‣\-–—]+", "", s).strip())
+            hits.append(_clean_sentence(s))
         if len(hits) >= limit:
             break
     return hits
