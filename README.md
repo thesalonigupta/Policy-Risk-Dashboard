@@ -6,6 +6,8 @@ A Streamlit dashboard that connects political money, regulation, company disclos
 
 **Built:** October 2026 (deployed on Streamlit Community Cloud, Oct 19, 2026). Market data and Federal Register rules refresh daily; see *Keeping it fresh* below.
 
+**License:** [MIT](LICENSE). The license covers the code only; the underlying data comes from public sources (FEC, Senate LDA, SEC, Federal Register) under their own terms.
+
 1. **Political money**: employee contributions by sector and year, top committees, donor concentration, a coordinated-giving screen, employee giving vs. company lobbying, **lobbying by issue** (Senate LDA filings: issue codes and topics such as AI, crypto and capital rules), and **which donations reach members of the banking committees** (recipient committees linked to sitting members and their House Financial Services / Senate Banking seats).
 2. **Market reaction**: event study of abnormal returns (market model, CAR, rough t-stat) with a placebo test, window comparison and all-firm reaction chart. Events can be landmark dates, the latest regulator rules from the Federal Register, or a custom date. Also a **cross-rule study** (do some agencies or rule types matter more, tested against random dates) and **enforcement actions** against single firms (SEC, CFPB, Fed, OCC; each linked to the agency release).
 3. **Filing risk language**: AI, regulatory and political language in 10-K risk sections, per 1,000 words, with the matching sentences, a peer comparison and a year-over-year view of added and dropped sentences.
