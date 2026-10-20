@@ -215,7 +215,7 @@ if all_real:
     _sectors = sorted(summ["by_sector_year"]["sector"].unique())
     _conc = summ["concentration"][summ["concentration"]["sectors"] == pm._sector_key(_sectors)].iloc[0]
     _lbf = REAL / "lobbying_by_firm.csv"
-    if _lbf.exists():
+    if not money_is_demo and _lbf.exists() and "employer_year" in summ:
         _lb = pd.read_csv(_lbf)
         _ey = summ["employer_year"]
         _don, _lob = _ey["total"].sum(), _lb["spend"].sum()
