@@ -1,0 +1,25 @@
+set,topic,method,precision,recall,f1,f1_low,f1_high,est_positives,labeled_rows
+development,AI,keywords,0.822,1.0,0.902,0.826,0.969,327,64
+development,AI,similarity only,0.699,0.639,0.668,0.621,0.722,327,64
+development,AI,hybrid (keyword + similarity),0.965,1.0,0.982,0.943,1.0,327,64
+development,AI,zero-shot NLI,0.958,0.819,0.883,0.806,0.958,327,64
+development,Regulatory,keywords,0.623,0.768,0.688,0.459,0.878,5830,64
+development,Regulatory,similarity only,0.935,0.174,0.293,0.202,0.459,5830,64
+development,Regulatory,hybrid (keyword + similarity),0.857,0.867,0.862,0.68,0.965,5830,64
+development,Regulatory,zero-shot NLI,0.777,0.692,0.732,0.512,0.926,5830,64
+development,Political,keywords,0.627,0.923,0.747,0.571,0.888,1247,64
+development,Political,similarity only,0.468,0.295,0.362,0.268,0.478,1247,64
+development,Political,hybrid (keyword + similarity),0.782,0.844,0.812,0.637,0.942,1247,64
+development,Political,zero-shot NLI,0.849,0.291,0.434,0.199,0.657,1247,64
+hold-out,AI,keywords,0.919,1.0,0.958,0.924,0.99,307,24
+hold-out,AI,similarity only,1.0,0.57,0.726,0.378,0.921,307,24
+hold-out,AI,hybrid (keyword + similarity),1.0,0.912,0.954,0.922,0.988,307,24
+hold-out,AI,zero-shot NLI,1.0,0.912,0.954,0.922,0.988,307,24
+hold-out,Regulatory,keywords,0.817,0.643,0.719,0.521,0.928,8925,32
+hold-out,Regulatory,similarity only,,0.0,,0.0,0.0,8925,32
+hold-out,Regulatory,hybrid (keyword + similarity),0.69,0.458,0.551,0.372,0.754,8925,32
+hold-out,Regulatory,zero-shot NLI,1.0,0.354,0.523,0.281,0.778,8925,32
+hold-out,Political,keywords,0.46,1.0,0.63,0.347,0.831,795,24
+hold-out,Political,similarity only,1.0,0.185,0.312,0.0,0.674,795,24
+hold-out,Political,hybrid (keyword + similarity),0.5,0.741,0.597,0.201,0.829,795,24
+hold-out,Political,zero-shot NLI,,0.0,,0.0,0.0,795,24

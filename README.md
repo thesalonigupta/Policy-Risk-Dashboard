@@ -13,7 +13,7 @@ A Streamlit dashboard that connects political money, regulation, company disclos
 3. **Filing risk language**: AI, regulatory and political language in 10-K risk sections, per 1,000 words, with the matching sentences, a peer comparison and a year-over-year view of added and dropped sentences.
 4. **AI policy & themes**: sourced AI policy events (US and EU), how AI language in filings moved around them, sentences tying AI to regulation, AI lobbying, stock reactions to each event, a first-mention table for emerging risks, and a topic model.
 5. **Lending fairness**: a loan-approval model audited for disparate impact and equal-opportunity / equalized-odds gaps, a proxy-feature check, and **mitigation options** (reweighing, dropping features, one cutoff for all) plotted as an accuracy-vs-fairness trade-off. Group-specific cutoffs are shown only to size the trade-off and are flagged as generally unlawful in real lending.
-6. **Methods & limits**: sources, glossary and the judgment calls behind the results.
+6. **Methods & limits**: sources, glossary, the judgment calls behind the results, and a **text-method comparison**: keyword counts vs. embedding similarity, a hybrid rule and a zero-shot language model, scored against hand-labeled 10-K sentences (the alternatives did not beat keywords on a hold-out sample).
 
 > The Political money tab reads aggregated summaries from `data/public/` (no donor-level rows). The raw donor file stays on the author's computer, is gitignored, and regenerates the summaries with `python build_public_summaries.py`.
 > The app falls back to **synthetic demo data** (clearly bannered in the UI) for any file missing from `data/real/`; the repo ships with real data.
@@ -32,7 +32,7 @@ A Streamlit dashboard that connects political money, regulation, company disclos
 pip install -r requirements.txt
 python make_demo_data.py        # creates data/demo/*.csv
 streamlit run app.py
-pytest                          # 34 tests
+pytest                          # 43 tests
 python fetch_market_data.py     # optional: real prices + policy events for the Market tab (needs internet)
 ```
 
@@ -105,6 +105,25 @@ python import_donations.py fec_export.csv --donor contributor_name \
   --committee committee_name --employer contributor_employer
 ```
 
+## Text-method comparison (do meaning-based methods beat keywords?)
+
+The Filing tab scores risk language with keyword counts. To check whether reading sentence meaning does better, I hand-labeled
+10-K sentences (does this sentence discuss AI, regulation or politics? rules in `docs/labeling_guide.md`) and scored four methods
+against the labels: keywords, similarity to plain-English topic descriptions (all-MiniLM-L6-v2 embeddings), a hybrid (keyword hit AND
+similarity), and a zero-shot language-inference model. Samples are stratified by what the methods say (both / keyword only / other
+only / neither) and weighted back to all ~28,700 sentences. A 192-row development sample chose the hybrid rule; an 80-row hold-out
+drawn afterward tested it. The hybrid looked better on the development rows but about the same or worse on the hold-out, so the
+dashboard keeps keyword scoring. Limits: one labeler, small samples, wide intervals.
+
+```bash
+python make_label_sample.py                                      # development sample (already labeled in data/labels/)
+python make_label_sample.py --holdout --per-stratum 8 --seed 11  # hold-out sample
+python evaluate_semantic.py                                      # writes data/public/semantic_eval.csv (add --nli for the NLI model)
+```
+
+`evaluate_semantic.py` and `make_label_sample.py` download sentence-embedding models and need `pip install sentence-transformers`
+(and `transformers` for `--nli`). The Streamlit app does not: it only reads the published results, so `requirements.txt` is unchanged.
+
 ## Structure
 
 ```
@@ -120,6 +139,7 @@ analysis/               Pure functions, tested independently of the UI
   edgar.py              10-K download and Item 1A extraction
   ai_policy.py          AI events, language density, event reactions
   themes.py             first-mention table and topic model
+  semantic.py           meaning-based scoring tested against keywords (offline; app reads the results)
   lda.py                Senate lobbying filings by issue
   fairness.py           model training and fairness audit
   mitigation.py         reweighing, feature ablation, cutoff trade-offs
@@ -127,6 +147,8 @@ data/public/            aggregates and hand-checked event lists (safe to publish
 data/real/              public-source data the app uses (donor-level file is gitignored)
 refresh_data.py         daily refresh (rules, prices); run by GitHub Actions
 fetch_filings.py, fetch_lobbying_issues.py, build_committee_links.py, build_public_summaries.py
+make_label_sample.py, evaluate_semantic.py   draw labeling samples; score methods against hand labels
+data/labels/            hand-labeled sentences and sampling weights; docs/labeling_guide.md has the rules
 make_demo_data.py       synthetic data generator (with planted signals the tests check)
 tests/                  pytest suite
 ```
@@ -135,7 +157,7 @@ tests/                  pytest suite
 
 - **Demo data is made up.** Some signals are planted on purpose (a coordinated-giving burst, a lending disparity, an event-day shock) so the tests can confirm the code finds them.
 - **Coordinated-giving flags** are a screen. Group giving is often legal.
-- **Keyword scoring** of filings is transparent but crude; the AI tab adds a first-mention table and a topic model, but neither reads meaning.
+- **Keyword scoring** of filings is transparent but crude; the AI tab adds a first-mention table and a topic model, but neither reads meaning. A tested meaning-based alternative did not beat it on a hold-out sample (see *Text-method comparison*).
 - **Event labels and lists are hand-made.** AI events (Tighter / Looser / Neutral) and enforcement actions are my own checked selections, each with a source link, not complete lists.
 - **Committee links** are a floor: only recipients whose names clearly name one current member are linked, and committee seats are today's, not 2023-24.
 - **Many tests, few events.** The cross-rule, AI and enforcement studies run many comparisons on small samples, so a few small p-values would appear by luck; the app reports counts and p-values next to every result.

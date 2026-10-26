@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import ui
-from analysis import ai_policy, enforcement, fairness, mitigation, federal_register as fr, filings, market, political_money as pm, rule_study, themes
+from analysis import ai_policy, enforcement, fairness, mitigation, federal_register as fr, filings, market, political_money as pm, rule_study, semantic, themes
 
 ROOT = Path(__file__).parent
 REAL, DEMO, PUBLIC = ROOT / "data" / "real", ROOT / "data" / "demo", ROOT / "data" / "public"
@@ -960,6 +960,54 @@ with tab5:
         ["Lending", "CFPB HMDA 2024 New Jersey mortgages", "Static", "One state, one year; only fields available in the public file."],
     ], columns=["Tab", "Source", "Updates", "Main limitation"]), hide_index=True, width="stretch")
 
+    st.subheader("Does fancier text analysis beat keyword counting?")
+    ev_path, lab_dir = PUBLIC / "semantic_eval.csv", ROOT / "data" / "labels"
+    if not ev_path.exists():
+        st.info("The text-method comparison has not been generated yet. Run `python evaluate_semantic.py`.")
+    else:
+        ui.explain(
+            "The Filing tab counts keywords. Would reading each sentence's meaning give a better count?",
+            "I hand-labeled sentences from the 10-Ks (does this sentence discuss AI, regulation or politics?) and scored each method "
+            "against my labels. Precision is how many flagged sentences were right; recall is how many true sentences were caught; "
+            "F1 blends the two. Estimates are weighted back to all ~28,700 sentences.",
+            "One labeler (me) and small samples: 192 development rows and 80 hold-out rows. The hold-out sample was drawn after the "
+            "rule was chosen, so it is the fairer test, but its intervals are wide. Treat gaps under about 0.1 as ties.",
+        )
+        ev = pd.read_csv(ev_path)
+        which = st.radio("Labeled set", ["hold-out", "development"], horizontal=True, key="sem_set",
+                         help="The hold-out sample played no part in choosing the hybrid rule.")
+        d = ev[ev["set"] == which].copy()
+        d["F1"] = d["f1"].fillna(0.0)
+        figm = px.bar(d, x="topic", y="F1", color="method", barmode="group",
+                      error_y=(d["f1_high"] - d["F1"]).clip(lower=0), error_y_minus=(d["F1"] - d["f1_low"]).clip(lower=0),
+                      title=f"F1 against hand labels ({which} set; bars show a 95% interval)",
+                      labels={"topic": "", "method": ""}, color_discrete_sequence=[ui.NAVY, "#9AA8B5", ui.TEAL, ui.BRICK])
+        figm.update_yaxes(range=[0, 1.05])
+        st.plotly_chart(figm, width="stretch")
+        verd = semantic.eval_verdicts(ev, which)
+        for r in verd.itertuples():
+            st.write(f"- **{r.topic}:** the best alternative ({r.best_alternative}) scores F1 {r.alternative_f1:.2f} versus "
+                     f"{r.keyword_f1:.2f} for keywords, **{r.verdict}**.")
+        st.caption("Alternatives tried: similarity of each sentence to plain-English topic descriptions (a sentence-embedding model), a hybrid that "
+                   "needs a keyword hit and a similarity check, and a zero-shot language-inference model. On the development labels the hybrid looked "
+                   "better than keywords; on the hold-out sample that advantage mostly vanished, which is why the dashboard keeps keyword scores. "
+                   "Similarity-only and zero-shot were precise but missed many true sentences.")
+        with st.expander("Full table"):
+            st.dataframe(ev[ev["set"] == which].drop(columns=["set"]).round(2), hide_index=True, width="stretch")
+        lab_files = [lab_dir / "risk_sentences_labeled.csv", lab_dir / "risk_sentences_holdout_labeled.csv"]
+        if all(p.exists() for p in lab_files):
+            errs = semantic.keyword_errors(pd.concat([pd.read_csv(p) for p in lab_files], ignore_index=True), filings.LEXICONS)
+            with st.expander("Where keyword counts were wrong"):
+                etopic = st.radio("Topic", list(filings.LEXICONS), horizontal=True, key="sem_err_topic")
+                for kind, blurb in [("false positive", "Keyword matched, but the sentence is not about the topic"),
+                                    ("missed", "No keyword matched, but the sentence is about the topic")]:
+                    sub = errs[(errs["topic"] == etopic) & (errs["error"] == kind)]
+                    st.markdown(f"**{blurb}** ({len(sub)} of the labeled rows)")
+                    for x in sub.head(5).itertuples():
+                        st.write(f"• {x.sentence[:320]}{'...' if len(x.sentence) > 320 else ''} ({x.company}, FY{x.year})")
+                    if sub.empty:
+                        st.caption("None in the labeled rows.")
+
     st.subheader("Plain-English glossary")
     st.markdown(
         "- **Abnormal return**: how much a stock moved beyond what the overall market would predict that day.\n"
@@ -973,7 +1021,9 @@ with tab5:
         "- **Per 1,000 words**: keyword hits scaled by document length so filings can be compared.\n"
         "- **Permutation test**: asking how often random dates would average a result as large as the real one.\n"
         "- **Reweighing**: giving training rows different weights so a model learns as if group and outcome were unrelated.\n"
-        "- **Topic model**: an algorithm that groups sentences by shared words; the labels are just the top words, not a judgment of meaning."
+        "- **Topic model**: an algorithm that groups sentences by shared words; the labels are just the top words, not a judgment of meaning.\n"
+        "- **Precision / recall / F1**: of the sentences a method flags, the share that are right (precision); of the true sentences, the share it finds (recall); and one number that blends both (F1).\n"
+        "- **Hold-out sample**: labeled data kept aside until after a method was chosen, so it tests whether the result holds up on new examples."
     )
 
     st.subheader("Choices that affect the results")
@@ -988,6 +1038,7 @@ with tab5:
         "- **Placebo test.** 300 random dates, excluding the 20 trading days around the real event. The share of those dates that "
         "moved at least as much is an empirical p-value, not a formal significance test.\n"
         "- **Keyword counts.** Scores count how often a topic appears, not how risky a firm is. Section rewrites and merges change counts. "
+        "Meaning-based alternatives were tested against hand-labeled sentences and did not beat keywords on the hold-out sample (see the comparison above). "
         "The year-over-year view compares sentences instead, so it shows what wording is new.\n"
         "- **Sentence matching.** Sentences count as new when no sentence in the other year has similar word content (TF-IDF similarity below 0.55). "
         "Heavy rewording can still look like a change.\n"
