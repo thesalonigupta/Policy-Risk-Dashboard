@@ -13,6 +13,10 @@ Counting rule (chosen because it reproduces the existing Goldman Sachs figures e
 Known gap: the rule does not reproduce JPMorgan Chase (2023: 5.32M vs 4.75M in the file, 2024: 5.49M vs 5.80M)
 or BlackRock (2023: 2.79M vs 2.93M, 2024: 4.59M vs 4.79M). Peer rows should not be appended until that gap is
 explained; see the printed comparison.
+
+  python fetch_lobbying_spend.py --write         # also saves data/public/lobbying_spend_live.csv (used by the daily refresh)
+
+The live file is separate from data/real/lobbying_by_firm.csv, which the app reads and this script never touches.
 """
 import argparse
 import time
@@ -26,6 +30,7 @@ from analysis import lda
 
 ROOT = Path(__file__).resolve().parent
 EXISTING = ROOT / "data" / "real" / "lobbying_by_firm.csv"
+LIVE_OUT = ROOT / "data" / "public" / "lobbying_spend_live.csv"
 
 
 def _amount(f: dict) -> float:
@@ -53,6 +58,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--firms", nargs="*", default=list(lda.CLIENTS))
     ap.add_argument("--years", nargs="*", type=int, default=[2023, 2024])
+    ap.add_argument("--write", action="store_true", help=f"save the result to {LIVE_OUT.relative_to(ROOT)}")
     args = ap.parse_args()
     session = requests.Session()
     existing = pd.read_csv(EXISTING).set_index(["firm", "year"])["spend"] if EXISTING.exists() else pd.Series(dtype=float)
@@ -65,7 +71,15 @@ def main():
             rows.append({"firm": firm, "year": year, "filings": len(filings), "spend": round(spend),
                          "existing": old, "ratio": round(spend / old, 3) if old == old else None})
             time.sleep(1)
-    print(pd.DataFrame(rows).to_string(index=False))
+    df = pd.DataFrame(rows)
+    print(df.to_string(index=False))
+    if args.write:
+        if df.empty or (df["filings"] == 0).all():
+            print("lobbying spend: no filings returned, keeping old file")
+            return
+        LIVE_OUT.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(LIVE_OUT, index=False)
+        print(f"lobbying spend: wrote {len(df)} rows to {LIVE_OUT.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

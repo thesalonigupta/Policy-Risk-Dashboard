@@ -19,11 +19,15 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: python refresh_data.py
+      - name: Refresh lobbying spend
+        continue-on-error: true   # an LDA outage should not block the other refreshes
+        run: python fetch_lobbying_spend.py --years 2023 2024 2025 --write
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/public/fed_register.csv data/real/prices.csv
+          [ -f data/public/lobbying_spend_live.csv ] && git add data/public/lobbying_spend_live.csv || true
           if git diff --cached --quiet; then
             echo "No data changes"
           else
